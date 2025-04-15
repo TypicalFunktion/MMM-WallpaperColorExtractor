@@ -117,8 +117,6 @@ For this module to work effectively, your custom.css should be using CSS variabl
 - Verify that the wallpaper path is correctly detected by checking the logs
 - If the module can't find your wallpaper directory automatically, specify it manually in the config
 
-See [INSTALLATION.md](INSTALLATION.md) for more detailed troubleshooting.
-
 ## Compatibility
 
 This module works best with:
@@ -132,3 +130,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 This project is licensed under the MIT License
+
+## Author
+
+Created by TypicalFunktion
