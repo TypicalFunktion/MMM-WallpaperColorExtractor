@@ -19,6 +19,7 @@ Module.register("MMM-WallpaperColorExtractor", {
         disableHolidayColors: false, // Set to true to disable special holiday colors
         samplingRatio: 0.1, // Sample 10% of the pixels for large images
         debugMode: true, // Set to false to reduce console output
+        wallpaperDir: "", // Path to your wallpaper directory (leave empty for auto-detection)
         
         // Fallback color scheme to choose from if no good vibrant color is found
         fallbackColors: [
