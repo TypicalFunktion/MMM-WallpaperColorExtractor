@@ -1,0 +1,20 @@
+{
+  "name": "MMM-WallpaperColorExtractor",
+  "version": "1.0.0",
+  "description": "Magic Mirror module to extract vibrant colors from wallpaper for theming",
+  "main": "MMM-WallpaperColorExtractor.js",
+  "scripts": {
+    "postinstall": "npm install node-vibrant@3.2.0-alpha"
+  },
+  "keywords": [
+    "magicmirror",
+    "module",
+    "theme",
+    "color"
+  ],
+  "author": "TypicalFunktion",
+  "license": "MIT",
+  "dependencies": {
+    "node-vibrant": "^3.2.0-alpha"
+  }
+}
