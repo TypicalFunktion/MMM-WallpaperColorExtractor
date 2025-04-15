@@ -102,18 +102,33 @@ module.exports = NodeHelper.create({
                 }
                 
                 // If no suitable color found, use a random color from fallback list
+                let success = true;
+                let colorSource = "";
+                
                 if (!selectedColor) {
                     const fallbackIndex = Math.floor(Math.random() * config.fallbackColors.length);
                     selectedColor = config.fallbackColors[fallbackIndex];
+                    success = false;
+                    colorSource = "fallback";
                     console.log("MMM-WallpaperColorExtractor: Using fallback color: " + selectedColor);
                 } else {
-                    console.log("MMM-WallpaperColorExtractor: Extracted color: " + selectedColor);
+                    if (config.colorExtractionMethod === "vibrant") {
+                        colorSource = palette.Vibrant ? "vibrant" : "light-vibrant";
+                    } else if (config.colorExtractionMethod === "muted") {
+                        colorSource = palette.Muted ? "muted" : "light-muted";
+                    } else {
+                        colorSource = "random-filtered";
+                    }
+                    console.log("MMM-WallpaperColorExtractor: Extracted color: " + selectedColor + " (source: " + colorSource + ")");
                 }
                 
-                // Send the color back to the module
+                // Send the color back to the module with detailed info
                 this.sendSocketNotification("COLOR_EXTRACTED", {
-                    success: true,
-                    color: selectedColor
+                    success: success,
+                    color: selectedColor,
+                    source: colorSource,
+                    method: config.colorExtractionMethod,
+                    fileInfo: path.basename(imagePath)
                 });
             })
             .catch((error) => {
@@ -124,7 +139,11 @@ module.exports = NodeHelper.create({
                 
                 this.sendSocketNotification("COLOR_EXTRACTED", {
                     success: false,
-                    color: fallbackColor
+                    color: fallbackColor,
+                    source: "error-fallback",
+                    method: config.colorExtractionMethod,
+                    fileInfo: path.basename(imagePath),
+                    error: error.message
                 });
             });
     },
