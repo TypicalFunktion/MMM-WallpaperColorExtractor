@@ -131,15 +131,35 @@ Module.register("MMM-WallpaperColorExtractor", {
     // Schedule next update
     scheduleUpdate: function() {
         this.debug("Scheduling update with interval:", this.config.updateInterval);
-        var self = this;
+        
+        // Check for wallpaper path manually periodically if we don't see it from the node helper
+        let lastImageCheck = 0;
+        const self = this;
+        
         setInterval(function() {
-            self.updateColor();
+            // Current time
+            const now = new Date().getTime();
+            
+            // Only check for wallpaper path every 30 seconds at most
+            if (now - lastImageCheck > 30000) {
+                self.debug("Checking for wallpaper manually");
+                lastImageCheck = now;
+                
+                // Try to find wallpaper in module directories
+                self.sendSocketNotification("CHECK_WALLPAPER", {});
+            }
+            
+            // No need to check for holiday color on every update
+            // This is now handled at startup only
         }, this.config.updateInterval);
+        
+        // Set the holiday color at startup if applicable
+        this.checkHolidayColor();
     },
     
-    // Update the color based on current method
-    updateColor: function() {
-        this.debug("Running scheduled color update");
+    // Check for holiday color - runs only once at startup
+    checkHolidayColor: function() {
+        this.debug("Checking for holiday color (once at startup)");
         
         // Check if we should use a holiday color for today
         const holidayColor = this.getHolidayColorForToday();
@@ -149,6 +169,8 @@ Module.register("MMM-WallpaperColorExtractor", {
             this.updateCssVariable(this.currentColor, "holiday");
         }
     },
+    
+    // Update the color based on current method - REMOVED - no longer needed since holiday checking is at startup only
     
     // Socket notification received
     socketNotificationReceived: function(notification, payload) {
