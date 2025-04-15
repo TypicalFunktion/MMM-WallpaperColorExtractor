@@ -63,7 +63,7 @@ Module.register("MMM-WallpaperColorExtractor", {
         this.loaded = false;
         
         // Set the initial CSS variable
-        this.updateCssVariable(this.currentColor);
+        this.updateCssVariable(this.currentColor, "default");
         
         // Subscribe to wallpaper change notifications
         this.sendSocketNotification("SUBSCRIBE_WALLPAPER_CHANGES", {
@@ -89,7 +89,7 @@ Module.register("MMM-WallpaperColorExtractor", {
         if (!this.config.disableHolidayColors && holidayColor) {
             Log.info("MMM-WallpaperColorExtractor: Using holiday color: " + holidayColor);
             this.currentColor = holidayColor;
-            this.updateCssVariable(this.currentColor);
+            this.updateCssVariable(this.currentColor, "holiday");
         }
     },
     
@@ -103,7 +103,8 @@ Module.register("MMM-WallpaperColorExtractor", {
             if (payload && payload.color) {
                 Log.info("MMM-WallpaperColorExtractor: Received extracted color: " + payload.color);
                 this.currentColor = payload.color;
-                this.updateCssVariable(this.currentColor);
+                const source = payload.success ? "wallpaper" : "fallback";
+                this.updateCssVariable(this.currentColor, source);
             }
         }
     },
@@ -155,17 +156,52 @@ Module.register("MMM-WallpaperColorExtractor", {
     },
     
     // Update CSS variable with new color
-    updateCssVariable: function(color) {
+    updateCssVariable: function(color, source) {
         if (!color) return;
+        
+        // Set default source if not provided
+        source = source || "unknown";
         
         Log.info("MMM-WallpaperColorExtractor: Updating CSS variable to: " + color);
         document.documentElement.style.setProperty(this.config.targetVariable, color);
         
+        // Add a visible console log to show the selected color and source
+        console.log("%c Selected Color: " + color + " (" + source + ") ", 
+            "background-color: " + color + "; color: " + this.getContrastColor(color) + "; font-size: 14px; padding: 4px 8px; border-radius: 4px;");
+        
         // Broadcast the color change to other modules
         this.sendNotification("COLOR_THEME_CHANGED", { 
             variable: this.config.targetVariable,
-            color: color 
+            color: color,
+            source: source
         });
+    },
+    
+    // Determine contrasting text color for the log
+    getContrastColor: function(hexColor) {
+        // If no color provided, return white
+        if (!hexColor) return "#FFFFFF";
+        
+        // Remove the hash if present
+        hexColor = hexColor.replace('#', '');
+        
+        // Convert the hex to RGB
+        let r, g, b;
+        if (hexColor.length === 3) {
+            r = parseInt(hexColor.charAt(0) + hexColor.charAt(0), 16);
+            g = parseInt(hexColor.charAt(1) + hexColor.charAt(1), 16);
+            b = parseInt(hexColor.charAt(2) + hexColor.charAt(2), 16);
+        } else {
+            r = parseInt(hexColor.substr(0, 2), 16);
+            g = parseInt(hexColor.substr(2, 2), 16);
+            b = parseInt(hexColor.substr(4, 2), 16);
+        }
+        
+        // Calculate the luminance
+        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        
+        // Return white for dark colors and black for light colors
+        return luminance > 0.5 ? "#000000" : "#FFFFFF";
     },
     
     // Override DOM generator
