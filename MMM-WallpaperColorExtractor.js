@@ -101,10 +101,29 @@ Module.register("MMM-WallpaperColorExtractor", {
         } 
         else if (notification === "COLOR_EXTRACTED") {
             if (payload && payload.color) {
-                Log.info("MMM-WallpaperColorExtractor: Received extracted color: " + payload.color);
+                // Create a detailed source description
+                let sourceInfo = "unknown";
+                
+                if (payload.source) {
+                    sourceInfo = payload.source;
+                    if (payload.fileInfo) {
+                        sourceInfo += " from " + payload.fileInfo;
+                    }
+                    if (payload.method) {
+                        sourceInfo += " (" + payload.method + " method)";
+                    }
+                }
+                
+                Log.info("MMM-WallpaperColorExtractor: Received extracted color: " + payload.color + " - " + sourceInfo);
                 this.currentColor = payload.color;
-                const source = payload.success ? "wallpaper" : "fallback";
-                this.updateCssVariable(this.currentColor, source);
+                
+                // Update the CSS with detailed source info
+                this.updateCssVariable(this.currentColor, sourceInfo);
+                
+                // Add a custom log message for even more detail if there was an error
+                if (payload.error) {
+                    console.log("MMM-WallpaperColorExtractor: Extraction error: " + payload.error);
+                }
             }
         }
     },
@@ -118,7 +137,7 @@ Module.register("MMM-WallpaperColorExtractor", {
         if (!this.config.disableHolidayColors && holidayColor) {
             Log.info("MMM-WallpaperColorExtractor: Using holiday color: " + holidayColor);
             this.currentColor = holidayColor;
-            this.updateCssVariable(this.currentColor);
+            this.updateCssVariable(this.currentColor, "holiday");
             return;
         }
         
