@@ -55,11 +55,6 @@ Module.register("MMM-WallpaperColorExtractor", {
     // Store the current vibrant color
     currentColor: null,
     
-    // Define required scripts
-    getScripts: function() {
-        return ["modules/MMM-WallpaperColorExtractor/node_modules/node-vibrant/dist/vibrant.min.js"];
-    },
-    
     // Override start method
     start: function() {
         Log.info("Starting module: " + this.name);
@@ -67,16 +62,16 @@ Module.register("MMM-WallpaperColorExtractor", {
         this.currentColor = this.config.defaultColor;
         this.loaded = false;
         
-        // Schedule the first update
-        this.scheduleUpdate();
-        
         // Set the initial CSS variable
         this.updateCssVariable(this.currentColor);
         
-        // Subscribe to wallpaper change notifications from MMM-Wallpaper
+        // Subscribe to wallpaper change notifications
         this.sendSocketNotification("SUBSCRIBE_WALLPAPER_CHANGES", {
             config: this.config
         });
+        
+        // Schedule the first update
+        this.scheduleUpdate();
     },
     
     // Schedule next update
@@ -90,7 +85,12 @@ Module.register("MMM-WallpaperColorExtractor", {
     // Update the color based on current method
     updateColor: function() {
         // This can be used for periodic checks or refreshes
-        // Currently, we primarily rely on the file monitoring system
+        const holidayColor = this.getHolidayColorForToday();
+        if (!this.config.disableHolidayColors && holidayColor) {
+            Log.info("MMM-WallpaperColorExtractor: Using holiday color: " + holidayColor);
+            this.currentColor = holidayColor;
+            this.updateCssVariable(this.currentColor);
+        }
     },
     
     // Socket notification received
@@ -98,6 +98,13 @@ Module.register("MMM-WallpaperColorExtractor", {
         if (notification === "WALLPAPER_CHANGED") {
             Log.info("MMM-WallpaperColorExtractor: Received wallpaper change notification");
             this.processNewWallpaper(payload.wallpaperPath);
+        } 
+        else if (notification === "COLOR_EXTRACTED") {
+            if (payload && payload.color) {
+                Log.info("MMM-WallpaperColorExtractor: Received extracted color: " + payload.color);
+                this.currentColor = payload.color;
+                this.updateCssVariable(this.currentColor);
+            }
         }
     },
     
@@ -120,98 +127,11 @@ Module.register("MMM-WallpaperColorExtractor", {
             return;
         }
         
-        // Create a new image to load the wallpaper
-        const img = new Image();
-        img.crossOrigin = "Anonymous";
-        
-        img.onload = function() {
-            try {
-                // Use Vibrant.js to extract the color palette
-                const vibrant = new Vibrant(img, {
-                    quality: 5, // Lower quality for better performance
-                    colorCount: 64, // Number of colors to extract
-                    filters: []
-                });
-                
-                vibrant.getPalette().then(function(swatches) {
-                    let selectedColor = null;
-                    
-                    // Choose color based on extraction method
-                    switch (self.config.colorExtractionMethod) {
-                        case "vibrant":
-                            if (swatches.Vibrant) {
-                                selectedColor = swatches.Vibrant.getHex();
-                            } else if (swatches.LightVibrant) {
-                                selectedColor = swatches.LightVibrant.getHex();
-                            }
-                            break;
-                        case "muted":
-                            if (swatches.Muted) {
-                                selectedColor = swatches.Muted.getHex();
-                            } else if (swatches.LightMuted) {
-                                selectedColor = swatches.LightMuted.getHex();
-                            }
-                            break;
-                        case "random":
-                        default:
-                            // Try to find a good color from all available swatches
-                            const allSwatches = [];
-                            for (let key in swatches) {
-                                if (swatches[key]) {
-                                    allSwatches.push(swatches[key]);
-                                }
-                            }
-                            
-                            // Filter swatches by brightness and saturation
-                            const goodSwatches = allSwatches.filter(function(swatch) {
-                                const rgb = swatch.getRgb();
-                                const hsl = self.rgbToHsl(rgb[0], rgb[1], rgb[2]);
-                                
-                                return (hsl[1] >= self.config.minSaturation && 
-                                        hsl[2] >= self.config.minBrightness && 
-                                        hsl[2] <= self.config.maxBrightness);
-                            });
-                            
-                            if (goodSwatches.length > 0) {
-                                // Pick a random good swatch
-                                const randomIndex = Math.floor(Math.random() * goodSwatches.length);
-                                selectedColor = goodSwatches[randomIndex].getHex();
-                            }
-                            break;
-                    }
-                    
-                    // If no suitable color found, use a random color from fallback list
-                    if (!selectedColor) {
-                        const fallbackIndex = Math.floor(Math.random() * self.config.fallbackColors.length);
-                        selectedColor = self.config.fallbackColors[fallbackIndex];
-                        Log.info("MMM-WallpaperColorExtractor: Using fallback color: " + selectedColor);
-                    } else {
-                        Log.info("MMM-WallpaperColorExtractor: Extracted color: " + selectedColor);
-                    }
-                    
-                    // Update the current color and CSS variable
-                    self.currentColor = selectedColor;
-                    self.updateCssVariable(self.currentColor);
-                });
-            } catch (error) {
-                Log.error("MMM-WallpaperColorExtractor: Error extracting color", error);
-                // Use fallback color
-                const fallbackIndex = Math.floor(Math.random() * self.config.fallbackColors.length);
-                self.currentColor = self.config.fallbackColors[fallbackIndex];
-                self.updateCssVariable(self.currentColor);
-            }
-        };
-        
-        img.onerror = function() {
-            Log.error("MMM-WallpaperColorExtractor: Error loading image: " + imagePath);
-            // Use fallback color
-            const fallbackIndex = Math.floor(Math.random() * self.config.fallbackColors.length);
-            self.currentColor = self.config.fallbackColors[fallbackIndex];
-            self.updateCssVariable(self.currentColor);
-        };
-        
-        // Set the image source to start loading
-        img.src = imagePath;
+        // Use server-side extraction via node_helper
+        this.sendSocketNotification("EXTRACT_COLOR", {
+            imagePath: imagePath,
+            config: this.config
+        });
     },
     
     // Get today's holiday color if applicable
@@ -236,6 +156,8 @@ Module.register("MMM-WallpaperColorExtractor", {
     
     // Update CSS variable with new color
     updateCssVariable: function(color) {
+        if (!color) return;
+        
         Log.info("MMM-WallpaperColorExtractor: Updating CSS variable to: " + color);
         document.documentElement.style.setProperty(this.config.targetVariable, color);
         
@@ -244,34 +166,6 @@ Module.register("MMM-WallpaperColorExtractor", {
             variable: this.config.targetVariable,
             color: color 
         });
-    },
-    
-    // Utility: Convert RGB to HSL
-    rgbToHsl: function(r, g, b) {
-        r /= 255;
-        g /= 255;
-        b /= 255;
-        
-        const max = Math.max(r, g, b);
-        const min = Math.min(r, g, b);
-        let h, s, l = (max + min) / 2;
-        
-        if (max === min) {
-            h = s = 0; // achromatic
-        } else {
-            const d = max - min;
-            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-            
-            switch (max) {
-                case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-                case g: h = (b - r) / d + 2; break;
-                case b: h = (r - g) / d + 4; break;
-            }
-            
-            h /= 6;
-        }
-        
-        return [h, s, l];
     },
     
     // Override DOM generator
