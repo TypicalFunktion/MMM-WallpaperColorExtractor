@@ -1,7 +1,7 @@
 /* Magic Mirror
  * Node Helper: MMM-WallpaperColorExtractor
  *
- * By Claude & User
+ * By TypicalFunktion
  * MIT Licensed.
  */
 
