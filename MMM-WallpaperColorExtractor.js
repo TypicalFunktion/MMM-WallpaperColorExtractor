@@ -18,6 +18,7 @@ Module.register("MMM-WallpaperColorExtractor", {
         colorExtractionMethod: "vibrant", // vibrant, muted, or random
         disableHolidayColors: false, // Set to true to disable special holiday colors
         samplingRatio: 0.1, // Sample 10% of the pixels for large images
+        debugMode: true, // Set to false to reduce console output
         
         // Fallback color scheme to choose from if no good vibrant color is found
         fallbackColors: [
@@ -55,9 +56,17 @@ Module.register("MMM-WallpaperColorExtractor", {
     // Store the current vibrant color
     currentColor: null,
     
+    // Debug logging function
+    debug: function(...args) {
+        if (this.config.debugMode) {
+            console.log("MMM-WallpaperColorExtractor [DEBUG]:", ...args);
+        }
+    },
+    
     // Override start method
     start: function() {
         Log.info("Starting module: " + this.name);
+        this.debug("Module configuration:", JSON.stringify(this.config));
         
         this.currentColor = this.config.defaultColor;
         this.loaded = false;
@@ -66,16 +75,61 @@ Module.register("MMM-WallpaperColorExtractor", {
         this.updateCssVariable(this.currentColor, "default");
         
         // Subscribe to wallpaper change notifications
+        this.debug("Sending SUBSCRIBE_WALLPAPER_CHANGES notification");
         this.sendSocketNotification("SUBSCRIBE_WALLPAPER_CHANGES", {
             config: this.config
         });
+        
+        // Try to get background URL from DOM if MMM-Wallpaper is loaded
+        setTimeout(() => {
+            this.checkForExistingWallpaper();
+        }, 5000);
         
         // Schedule the first update
         this.scheduleUpdate();
     },
     
+    // Check for existing wallpaper
+    checkForExistingWallpaper: function() {
+        this.debug("Checking for existing wallpaper...");
+        
+        // Look for wallpaper in the DOM
+        const wallpaperElements = document.querySelectorAll(".region.fullscreen_below");
+        this.debug("Found fullscreen_below elements:", wallpaperElements.length);
+        
+        if (wallpaperElements.length > 0) {
+            for (let i = 0; i < wallpaperElements.length; i++) {
+                const element = wallpaperElements[i];
+                this.debug("Checking element:", element);
+                
+                // Check for background image
+                const imgs = element.querySelectorAll("img");
+                if (imgs.length > 0) {
+                    for (let j = 0; j < imgs.length; j++) {
+                        const img = imgs[j];
+                        const src = img.src;
+                        if (src) {
+                            this.debug("Found image source:", src);
+                            // For locally loaded images, we should already be handling them
+                            // But we can try to extract from the DOM element as a fallback
+                        }
+                    }
+                }
+                
+                // Check for background-image style
+                const bgImage = window.getComputedStyle(element).backgroundImage;
+                if (bgImage && bgImage !== "none") {
+                    this.debug("Found background image style:", bgImage);
+                }
+            }
+        } else {
+            this.debug("No fullscreen_below elements found");
+        }
+    },
+    
     // Schedule next update
     scheduleUpdate: function() {
+        this.debug("Scheduling update with interval:", this.config.updateInterval);
         var self = this;
         setInterval(function() {
             self.updateColor();
@@ -84,10 +138,12 @@ Module.register("MMM-WallpaperColorExtractor", {
     
     // Update the color based on current method
     updateColor: function() {
-        // This can be used for periodic checks or refreshes
+        this.debug("Running scheduled color update");
+        
+        // Check if we should use a holiday color for today
         const holidayColor = this.getHolidayColorForToday();
         if (!this.config.disableHolidayColors && holidayColor) {
-            Log.info("MMM-WallpaperColorExtractor: Using holiday color: " + holidayColor);
+            this.debug("Using holiday color:", holidayColor);
             this.currentColor = holidayColor;
             this.updateCssVariable(this.currentColor, "holiday");
         }
@@ -95,8 +151,11 @@ Module.register("MMM-WallpaperColorExtractor", {
     
     // Socket notification received
     socketNotificationReceived: function(notification, payload) {
+        this.debug("Received socket notification:", notification, payload);
+        
         if (notification === "WALLPAPER_CHANGED") {
             Log.info("MMM-WallpaperColorExtractor: Received wallpaper change notification");
+            this.debug("Wallpaper path:", payload.wallpaperPath);
             this.processNewWallpaper(payload.wallpaperPath);
         } 
         else if (notification === "COLOR_EXTRACTED") {
@@ -115,6 +174,8 @@ Module.register("MMM-WallpaperColorExtractor", {
                 }
                 
                 Log.info("MMM-WallpaperColorExtractor: Received extracted color: " + payload.color + " - " + sourceInfo);
+                this.debug("Received color:", payload.color, "Source:", sourceInfo);
+                
                 this.currentColor = payload.color;
                 
                 // Update the CSS with detailed source info
@@ -124,6 +185,8 @@ Module.register("MMM-WallpaperColorExtractor", {
                 if (payload.error) {
                     console.log("MMM-WallpaperColorExtractor: Extraction error: " + payload.error);
                 }
+            } else {
+                this.debug("Received empty COLOR_EXTRACTED notification");
             }
         }
     },
@@ -132,9 +195,12 @@ Module.register("MMM-WallpaperColorExtractor", {
     processNewWallpaper: function(imagePath) {
         const self = this;
         
+        this.debug("Processing new wallpaper:", imagePath);
+        
         // Check if we should use a holiday color for today
         const holidayColor = this.getHolidayColorForToday();
         if (!this.config.disableHolidayColors && holidayColor) {
+            this.debug("Using holiday color for today:", holidayColor);
             Log.info("MMM-WallpaperColorExtractor: Using holiday color: " + holidayColor);
             this.currentColor = holidayColor;
             this.updateCssVariable(this.currentColor, "holiday");
@@ -143,11 +209,13 @@ Module.register("MMM-WallpaperColorExtractor", {
         
         // If no image path provided, skip extraction
         if (!imagePath) {
+            this.debug("No image path provided, skipping extraction");
             Log.warn("MMM-WallpaperColorExtractor: No image path provided");
             return;
         }
         
         // Use server-side extraction via node_helper
+        this.debug("Sending EXTRACT_COLOR notification for:", imagePath);
         this.sendSocketNotification("EXTRACT_COLOR", {
             imagePath: imagePath,
             config: this.config
@@ -160,28 +228,38 @@ Module.register("MMM-WallpaperColorExtractor", {
         const day = String(today.getDate()).padStart(2, '0');
         const month = String(today.getMonth() + 1).padStart(2, '0');
         
+        this.debug("Checking holiday colors for date:", month + "-" + day);
+        
         // Check for specific day holiday color
         const dateKey = month + "-" + day;
         if (this.config.holidayColors[dateKey]) {
+            this.debug("Found holiday color for specific date:", this.config.holidayColors[dateKey]);
             return this.config.holidayColors[dateKey];
         }
         
         // Check for month-based seasonal color
         if (this.config.monthColors[month]) {
+            this.debug("Found seasonal color for month:", this.config.monthColors[month]);
             return this.config.monthColors[month];
         }
         
+        this.debug("No holiday or seasonal color found for today");
         return null;
     },
     
     // Update CSS variable with new color
     updateCssVariable: function(color, source) {
-        if (!color) return;
+        if (!color) {
+            this.debug("No color provided to updateCssVariable");
+            return;
+        }
         
         // Set default source if not provided
         source = source || "unknown";
         
+        this.debug("Updating CSS variable", this.config.targetVariable, "to", color, "from source:", source);
         Log.info("MMM-WallpaperColorExtractor: Updating CSS variable to: " + color);
+        
         document.documentElement.style.setProperty(this.config.targetVariable, color);
         
         // Add a visible console log to show the selected color and source
