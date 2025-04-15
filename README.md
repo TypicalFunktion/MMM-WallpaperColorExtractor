@@ -14,7 +14,8 @@ This module works great with modules that display wallpapers like MMM-Wallpaper.
 
 ## Screenshots
 
-*The module doesn't display visual elements itself but changes the color scheme of other modules*
+![Example of changing highlight colors](https://example.com/placeholder-image.jpg)
+*Example showing how the highlight color changes based on the wallpaper*
 
 ## Installation
 
@@ -25,7 +26,7 @@ cd ~/MagicMirror/modules/
 
 2. Clone this repository:
 ```bash
-git clone https://github.com/typicalfunktion/MMM-WallpaperColorExtractor.git
+git clone https://github.com/yourusername/MMM-WallpaperColorExtractor.git
 ```
 
 3. Install dependencies:
@@ -73,9 +74,13 @@ modules: [
 | `targetVariable`         | CSS variable to update with the extracted color                                                       | `"--color-text-highlight"` |
 | `colorExtractionMethod`  | Method to extract colors: "vibrant", "muted", or "random"                                             | `"vibrant"`            |
 | `disableHolidayColors`   | Set to `true` to disable special holiday colors                                                       | `false`                |
+| `wallpaperDir`           | Manually specify the wallpaper directory (optional)                                                   | `""`                   |
+| `samplingRatio`          | Portion of pixels to sample for large images (0-1)                                                    | `0.1`                  |
 | `fallbackColors`         | Array of colors to randomly choose from if extraction fails                                           | Array of pastel colors  |
 | `holidayColors`          | Object mapping "MM-DD" dates to colors for holidays                                                   | Various holiday colors  |
 | `monthColors`            | Object mapping "MM" months to seasonal colors                                                         | October, December colors|
+
+See [Example-Config.md](Example-Config.md) for more configuration examples.
 
 ## Customize your CSS
 
@@ -110,6 +115,9 @@ For this module to work effectively, your custom.css should be using CSS variabl
 - If colors aren't changing, make sure your CSS is using the variable specified in `targetVariable`
 - Check the browser console and server logs for any errors
 - Verify that the wallpaper path is correctly detected by checking the logs
+- If the module can't find your wallpaper directory automatically, specify it manually in the config
+
+See [INSTALLATION.md](INSTALLATION.md) for more detailed troubleshooting.
 
 ## Compatibility
 
