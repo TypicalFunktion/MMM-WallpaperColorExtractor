@@ -15,7 +15,7 @@
   "author": "Claude & User",
   "license": "MIT",
   "dependencies": {
-    "node-vibrant": "^3.2.0"
+    "node-vibrant": "^4.0.2"
   },
   "overrides": {
     "phin": "^3.7.0",
