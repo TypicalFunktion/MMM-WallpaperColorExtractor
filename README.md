@@ -26,7 +26,7 @@ cd ~/MagicMirror/modules/
 
 2. Clone this repository:
 ```bash
-git clone https://github.com/yourusername/MMM-WallpaperColorExtractor.git
+git clone https://github.com/TypicalFunktion/MMM-WallpaperColorExtractor.git
 ```
 
 3. Install dependencies:
