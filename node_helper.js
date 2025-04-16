@@ -10,6 +10,10 @@ const path = require("path");
 const fs = require("fs");
 const { exec } = require("child_process");
 const Vibrant = require('node-vibrant');
+const http = require('http');
+const https = require('https');
+const url = require('url');
+const crypto = require('crypto');
 
 module.exports = NodeHelper.create({
     // Initialize the helper
@@ -21,6 +25,12 @@ module.exports = NodeHelper.create({
         this.watchTimer = null;
         this.checkCount = 0;
         this.searchedDirs = [];
+        this.cachePath = path.join(__dirname, "cache");
+        
+        // Create cache directory if it doesn't exist
+        if (!fs.existsSync(this.cachePath)) {
+            fs.mkdirSync(this.cachePath, { recursive: true });
+        }
     },
     
     // Socket notification received from module
@@ -57,6 +67,68 @@ module.exports = NodeHelper.create({
                 }
             }
         }
+        else if (notification === "PROCESS_REMOTE_WALLPAPER") {
+            console.log(`MMM-WallpaperColorExtractor: Processing remote wallpaper: ${payload.url}`);
+            this.processRemoteWallpaper(payload.url, payload.config);
+        }
+    },
+    
+    // Process a remote wallpaper
+    processRemoteWallpaper: function(wallpaperUrl, config) {
+        if (!wallpaperUrl) {
+            console.log("MMM-WallpaperColorExtractor: No URL provided");
+            return;
+        }
+        
+        const self = this;
+        const urlHash = crypto.createHash('md5').update(wallpaperUrl).digest('hex');
+        const cachedImagePath = path.join(this.cachePath, urlHash + '.jpg');
+        
+        // Check if image is already cached
+        if (fs.existsSync(cachedImagePath)) {
+            console.log(`MMM-WallpaperColorExtractor: Using cached image for ${wallpaperUrl}`);
+            this.extractColorFromImage(cachedImagePath, config);
+            return;
+        }
+        
+        console.log(`MMM-WallpaperColorExtractor: Downloading image from ${wallpaperUrl}`);
+        
+        // Parse the URL to determine if we need http or https
+        const parsedUrl = url.parse(wallpaperUrl);
+        const httpModule = parsedUrl.protocol === 'https:' ? https : http;
+        
+        const request = httpModule.get(wallpaperUrl, (response) => {
+            if (response.statusCode !== 200) {
+                console.log(`MMM-WallpaperColorExtractor: Failed to download image: ${response.statusCode}`);
+                return;
+            }
+            
+            const fileStream = fs.createWriteStream(cachedImagePath);
+            response.pipe(fileStream);
+            
+            fileStream.on('finish', () => {
+                fileStream.close();
+                console.log(`MMM-WallpaperColorExtractor: Successfully downloaded image to ${cachedImagePath}`);
+                
+                // Now extract color from the downloaded image
+                self.extractColorFromImage(cachedImagePath, config);
+            });
+        });
+        
+        request.on('error', (err) => {
+            console.log(`MMM-WallpaperColorExtractor: Error downloading image: ${err.message}`);
+            
+            // Send fallback color
+            const fallbackIndex = Math.floor(Math.random() * config.fallbackColors.length);
+            const fallbackColor = config.fallbackColors[fallbackIndex];
+            
+            self.sendSocketNotification("COLOR_EXTRACTED", {
+                success: false,
+                color: fallbackColor,
+                source: "download-error",
+                error: err.message
+            });
+        });
     },
     
     // Search for wallpapers in common locations
@@ -71,7 +143,7 @@ module.exports = NodeHelper.create({
             "/home/pi/MagicMirror/modules/MMM-Wallpaper/cache",
             "/home/RYFUN/MagicMirror/modules/MMM-Wallpaper/cache",
             
-            // From config.js
+            // From the RYFUN config
             "/media/RYFUN/display/backgrounds",
             
             // Common system locations
@@ -478,7 +550,7 @@ module.exports = NodeHelper.create({
             if (newestFile && newestFile !== this.currentWallpaper) {
                 console.log(`MMM-WallpaperColorExtractor: Detected wallpaper change to: ${newestFile}`);
                 this.currentWallpaper = newestFile;
-                this.notifyModuleOfWallpaperChange(this.currentWallpaper);
+                this.notifyModuleOfWallpaperChange(newestFile);
             }
         } catch (error) {
             console.log("MMM-WallpaperColorExtractor: Error checking for wallpaper changes", error);
