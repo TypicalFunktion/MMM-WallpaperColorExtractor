@@ -24,29 +24,18 @@ Module.register("MMM-WallpaperColorExtractor", {
         debugMode: true, // Set to false to reduce console output
         priorityOrder: [
             "holiday", // Highest priority - if it's a holiday, use that color
-   	        "wallpaper", // Fallback to wallpaper extraction
-						"weather", // If there's severe weather, use that color
+				"wallpaper", // Fallback to wallpaper extraction
+				"weather", // If there's severe weather, use that color
             "time"    // Time of day colors
 
         ],
         
         // Weather-based colors (to match compliments)
         weatherColors: {
-            "showers": "#4682B4",      // Steel blue for rain
-            "night_showers": "#000080", // Navy blue for night rain
-            "rain": "#4682B4",         // Steel blue for rain
-            "night_rain": "#000080",    // Navy blue for night rain
-            "snow": "#E0FFFF",         // Light cyan for snow
-            "night_snow": "#B0E0E6",    // Powder blue for night snow
-            "thunderstorm": "#4B0082",  // Indigo for storms
-            "night_thunderstorm": "#2F0059" // Darker purple for night storms
         },
         
         // Time-of-day colors (to match compliments)
         timeColors: {
-            "morning": "#FFD700",   // Gold for morning (6am-12pm)
-            "afternoon": "#FF7F50", // Coral for afternoon (12pm-6pm)
-            "evening": "#4B0082"    // Indigo for evening (6pm-6am)
         },
         
         // Fallback color scheme to choose from if no good vibrant color is found
@@ -118,18 +107,6 @@ Module.register("MMM-WallpaperColorExtractor", {
         
         // Month-based seasonal colors (if no specific day is defined)
         monthColors: {
-            "01": "#ADD8E6", // January - Winter blue
-            "02": "#E6E6FA", // February - Lavender
-            "03": "#98FB98", // March - Pale green (Spring)
-            "04": "#FFA07A", // April - Light salmon (Spring)
-            "05": "#FFCE54", // May - Light yellow (Late Spring)
-            "06": "#77DD77", // June - Pastel green (Early Summer)
-            "07": "#FF6B6B", // July - Bright red (Summer)
-            "08": "#FFD700", // August - Gold (Late Summer)
-            "09": "#E67E22", // September - Pumpkin (Early Fall)
-            "10": "#FF6700", // October - Halloween orange (Fall)
-            "11": "#CD853F", // November - Peru/tan (Thanksgiving)
-            "12": "#006400", // December - Dark green (Christmas)
         },
     },
     
