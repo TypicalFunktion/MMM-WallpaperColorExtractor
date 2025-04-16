@@ -1,5 +1,5 @@
 /* Magic Mirror
- * Module: MMM-WallpaperColorExtractor (with MMM-Wallpaper Integration)
+ * Module: MMM-WallpaperColorExtractor
  *
  * By TypicalFunktion
  * MIT License
@@ -22,12 +22,13 @@ Module.register("MMM-WallpaperColorExtractor", {
         wallpaperDir: "", // Path to your wallpaper directory (leave empty for auto-detection)
         samplingRatio: 0.1, // Sample 10% of the pixels for large images
         debugMode: true, // Set to false to reduce console output
+        observeInterval: 2000, // How often to check the DOM for new wallpaper (in ms)
         priorityOrder: [
             "holiday", // Highest priority - if it's a holiday, use that color
-				"wallpaper", // Fallback to wallpaper extraction
-				"weather", // If there's severe weather, use that color
+			"wallpaper", // Fallback to wallpaper extraction            
+			"weather", // If there's severe weather, use that color
             "time"    // Time of day colors
-
+            
         ],
         
         // Weather-based colors (to match compliments)
@@ -36,6 +37,7 @@ Module.register("MMM-WallpaperColorExtractor", {
         
         // Time-of-day colors (to match compliments)
         timeColors: {
+            
         },
         
         // Fallback color scheme to choose from if no good vibrant color is found
@@ -59,6 +61,7 @@ Module.register("MMM-WallpaperColorExtractor", {
 
             // Special Days - February
             "02-02": "#6B8E9F", // Groundhog Day (Cloudy blue-gray)
+            "02-11": "#FFB6C1", // Godmother Kim's Birthday (Light pink)
             "02-14": "#FF69B4", // Valentine's Day (Hot pink)
 
             // Special Days - March
@@ -67,35 +70,55 @@ Module.register("MMM-WallpaperColorExtractor", {
             "03-06": "#DC143C", // Casimir Pulaski Day (Polish flag red)
             "03-14": "#3141592", // Pi Day (A blue based on pi digits!)
             "03-17": "#00FF00", // St. Patrick's Day (Bright green)
-            
+            "03-18": "#FFA0A0", // Keelee's Birthday (Light pink from your CSS)
+
             // Special Days - April
-            
+            "04-20": "#9932CC", // Godfather Tim's Birthday (Purple)
+            "04-28": "#000080", // Scotsman's Birthday (Navy blue - Scottish flag color)
+
             // Special Days - May
             "05-04": "#4BD5EE", // Star Wars Day (Lightsaber blue)
             "05-05": "#FF4500", // Cinco de Mayo (Mexican flag red)
             "05-06": "#8B0000", // Revenge of the 6th (Sith red)
-            
+            "05-23": "#FF69B4", // Godmother Erin's Birthday (Hot pink)
+            "05-25": "#A52A2A", // Billy's Adoptiversary (Warm brown)
+
             // Special Days - June
-            
+            "06-26": "#FFCC00", // IKEA Anniversary (IKEA yellow)
+
             // Special Days - July
             "07-04": "#3C3B6E", // Independence Day (US flag blue)
-            
+            "07-08": "#FF1493", // When you met (Deep pink - romantic)
+            "07-25": "#800080", // Mommy's Birthday (Purple)
+
             // Special Days - August
             "08-01": "#2596be", // Colorado Day (Colorado flag blue)
 
             // Special Days - September
-            
+            "09-08": "#4682B4", // Godfather Wally's Birthday (Steel blue)
+            "09-13": "#45E201", // Ridley's Birthday (Green from your CSS)
+
             // Special Days - October
+            "10-01": "#8B4513", // Sherpa's Birthday (Dog-colored brown)
+            "10-15": "#0033AA", // Southwest Anniversary (Southwest Airlines blue)
+            "10-19": "#33CCFF", // Wally's Birthday & Anniversary (Blue from your CSS)
+            "10-22": "#400080", // Daddy's Birthday (Deep purple)
             "10-31": "#FF6700", // Halloween (Pumpkin orange)
 
             // Special Days - November
             "11-11": "#B22222", // Veterans Day (Firebrick red)
 
             // Special Days - December
+            "12-07": "#000080", // Pearl Harbor Day (Navy blue)
             "12-24": "#198754", // Christmas Eve (Christmas green)
             "12-25": "#FF0000", // Christmas (Red)
             "12-26": "#8E562E", // Boxing Day (Brown - cardboard box color)
-            
+            "12-27": "#87CEEB", // Post Christmas (Light blue) 
+            "12-28": "#87CEEB", // Post Christmas (Light blue)
+            "12-29": "#87CEEB", // Post Christmas (Light blue)
+            "12-30": "#87CEEB", // Post Christmas (Light blue)
+            "12-31": "#C0C0C0", // New Year's Eve (Silver)
+
             // Specific dates
             "2025-04-20": "#E6C9D1", // Easter 2025 (Light pink - Easter egg color)
             "2025-05-11": "#FFC0CB", // Mother's Day 2025 (Pink)
@@ -107,6 +130,7 @@ Module.register("MMM-WallpaperColorExtractor", {
         
         // Month-based seasonal colors (if no specific day is defined)
         monthColors: {
+            
         },
     },
     
@@ -114,9 +138,9 @@ Module.register("MMM-WallpaperColorExtractor", {
     currentColor: null,
     currentColorSource: null,
     currentWallpaperURL: null,
-    weatherStatus: null,
-    wallpaperImages: [],
-    currentImage: null,
+    lastObservedSrc: null,
+    observeTimer: null,
+    wallpaperObserver: null,
     
     // Debug logging function
     debug: function(...args) {
@@ -148,91 +172,115 @@ Module.register("MMM-WallpaperColorExtractor", {
         // Check holiday color at startup (highest priority)
         this.checkHolidayColor();
         
-        // Set up the observation of DOM for MMM-Wallpaper
-        this.observeWallpaperDOM();
-        
-        // Try to get background URL from DOM if MMM-Wallpaper is loaded
-        setTimeout(() => {
-            this.checkForExistingWallpaper();
-        }, 5000);
-        
+        // Start DOM observation manually to avoid relying on MMM-Wallpaper notifications
         this.loaded = true;
+    },
+    
+    // After DOM is ready, set up observation of wallpaper changes
+    notificationReceived: function(notification, payload, sender) {
+        if (notification === "MODULE_DOM_CREATED") {
+            // Wait a bit for all modules to be fully initialized
+            setTimeout(() => {
+                this.observeWallpaperDOM();
+                this.checkForExistingWallpaper();
+            }, 5000);
+        }
+        
+        // Listen for weather notifications
+        if (notification === "CURRENT_WEATHER" && this.config.enableWeatherColors) {
+            this.debug("Received current weather data:", payload);
+            
+            // Only apply weather color if it's higher priority than current color source
+            const currentPriority = this.config.priorityOrder.indexOf(this.currentColorSource);
+            const weatherPriority = this.config.priorityOrder.indexOf("weather");
+            
+            if (weatherPriority < currentPriority || currentPriority === -1) {
+                this.processWeatherData(payload);
+            }
+        }
     },
     
     // Create a MutationObserver to watch for wallpaper changes in the DOM
     observeWallpaperDOM: function() {
-        this.debug("Setting up MutationObserver for wallpaper changes");
+        this.debug("Setting up observation of wallpaper images in DOM");
         
-        if (typeof MutationObserver !== 'undefined') {
-            const self = this;
-            
-            // Create observer to watch for image changes
-            this.wallpaperObserver = new MutationObserver((mutations) => {
-                mutations.forEach((mutation) => {
-                    if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-                        // Check if any added nodes are images
-                        mutation.addedNodes.forEach((node) => {
-                            if (node.nodeName === 'IMG') {
-                                self.debug("Detected new image added to DOM:", node.src);
-                                self.handleNewWallpaperImage(node);
-                            }
-                        });
-                    }
-                });
-            });
-            
-            // Start observing with a delay to ensure DOM is ready
-            setTimeout(() => {
-                const wallpaperModules = document.querySelectorAll(".MMM-Wallpaper");
+        // Start periodic checking for images
+        const self = this;
+        this.observeTimer = setInterval(() => {
+            self.checkForWallpaperImages();
+        }, this.config.observeInterval);
+    },
+    
+    // Check for new wallpaper images in the DOM
+    checkForWallpaperImages: function() {
+        // Look for MMM-Wallpaper images
+        const wallpaperImages = document.querySelectorAll(".MMM-Wallpaper img");
+        
+        if (wallpaperImages.length > 0) {
+            // Get the most recent/visible image
+            for (let i = wallpaperImages.length - 1; i >= 0; i--) {
+                const img = wallpaperImages[i];
                 
-                if (wallpaperModules.length > 0) {
-                    self.debug("Found MMM-Wallpaper module in DOM, observing it");
-                    
-                    // Observe each module
-                    wallpaperModules.forEach(module => {
-                        self.wallpaperObserver.observe(module, {
-                            childList: true,
-                            subtree: true
-                        });
-                        
-                        // Check for existing images
-                        const images = module.querySelectorAll("img");
-                        if (images.length > 0) {
-                            self.debug("Found existing wallpaper images in DOM:", images.length);
-                            images.forEach(img => self.handleNewWallpaperImage(img));
-                        }
-                    });
-                } else {
-                    self.debug("MMM-Wallpaper module not found in DOM yet");
+                // Skip if it's the same image we already processed
+                if (img.src === this.lastObservedSrc) {
+                    continue;
                 }
-            }, 2000);
+                
+                // We found a new image, process it
+                this.debug("Found new wallpaper image:", img.src);
+                this.lastObservedSrc = img.src;
+                this.handleWallpaperImageUrl(img.src);
+                return; // Process only one new image at a time
+            }
         } else {
-            this.debug("MutationObserver not supported, fallback to polling");
+            // If no MMM-Wallpaper images, check for any background images
+            this.checkForBackgroundImages();
         }
     },
     
-    // Handle a new wallpaper image
-    handleNewWallpaperImage: function(imgNode) {
-        // If it's the same URL as the one we already processed, skip
-        if (this.currentWallpaperURL === imgNode.src) {
-            this.debug("Skipping already processed image:", imgNode.src);
-            return;
+    // Check for background images in the DOM
+    checkForBackgroundImages: function() {
+        // Look for elements with background-image style
+        const elements = document.querySelectorAll(".region.fullscreen_below");
+        
+        for (let i = 0; i < elements.length; i++) {
+            const style = window.getComputedStyle(elements[i]);
+            const bgImage = style.backgroundImage;
+            
+            if (bgImage && bgImage !== "none") {
+                // Extract URL from CSS background-image
+                const urlMatch = bgImage.match(/url\(['"]?([^'"()]+)['"]?\)/i);
+                if (urlMatch && urlMatch[1]) {
+                    const imgUrl = urlMatch[1];
+                    
+                    // Skip if it's the same image we already processed
+                    if (imgUrl === this.lastObservedSrc) {
+                        continue;
+                    }
+                    
+                    // We found a new background image
+                    this.debug("Found new background image:", imgUrl);
+                    this.lastObservedSrc = imgUrl;
+                    this.handleWallpaperImageUrl(imgUrl);
+                    return; // Process only one new image at a time
+                }
+            }
         }
-        
-        this.debug("Processing new wallpaper image:", imgNode.src);
-        this.currentWallpaperURL = imgNode.src;
-        
-        // Only process if it's a local file (not a remote URL)
-        if (imgNode.src.startsWith('http') && !imgNode.src.includes('localhost')) {
-            this.debug("Remote wallpaper URL detected, sending to node_helper for processing");
+    },
+    
+    // Process a wallpaper image URL
+    handleWallpaperImageUrl: function(imgUrl) {
+        if (imgUrl.startsWith("http") && !imgUrl.includes("localhost") && !imgUrl.includes("127.0.0.1")) {
+            // This is a remote URL, send it to the helper for downloading
+            this.debug("Processing remote wallpaper URL:", imgUrl);
             this.sendSocketNotification("PROCESS_REMOTE_WALLPAPER", {
-                url: imgNode.src,
+                url: imgUrl,
                 config: this.config
             });
         } else {
-            // Extract the file path from the URL
+            // This is a local file URL, convert to file path
             try {
-                const fileUrl = new URL(imgNode.src);
+                const fileUrl = new URL(imgUrl);
                 let filePath = decodeURIComponent(fileUrl.pathname);
                 
                 // For localhost URLs on Windows, remove the leading slash
@@ -267,92 +315,19 @@ Module.register("MMM-WallpaperColorExtractor", {
                     
                     // Use the most recent image (last in the DOM)
                     const lastImage = images[images.length - 1];
-                    this.handleNewWallpaperImage(lastImage);
-                    return; // Exit once we've found and processed an image
-                }
-            }
-        }
-        
-        // If no MMM-Wallpaper module found, look for any background images
-        const fullscreenModules = document.querySelectorAll(".region.fullscreen_below");
-        this.debug("Found fullscreen_below elements:", fullscreenModules.length);
-        
-        if (fullscreenModules.length > 0) {
-            for (let i = 0; i < fullscreenModules.length; i++) {
-                const element = fullscreenModules[i];
-                
-                // Check for images
-                const imgs = element.querySelectorAll("img");
-                if (imgs.length > 0) {
-                    this.debug("Found images in fullscreen region:", imgs.length);
                     
-                    // Use the most recent image (last in the DOM)
-                    const lastImage = imgs[imgs.length - 1];
-                    this.handleNewWallpaperImage(lastImage);
-                    return; // Exit once we've found and processed an image
-                }
-                
-                // Check for background-image style
-                const bgImage = window.getComputedStyle(element).backgroundImage;
-                if (bgImage && bgImage !== "none") {
-                    this.debug("Found background image style:", bgImage);
-                    
-                    // Extract URL from the background-image style
-                    const match = bgImage.match(/url\(['"]?([^'"()]*)['"]?\)/i);
-                    if (match && match[1]) {
-                        const url = match[1];
-                        
-                        // Create a temporary image element to process
-                        const tempImg = document.createElement("img");
-                        tempImg.src = url;
-                        this.handleNewWallpaperImage(tempImg);
+                    if (lastImage.src) {
+                        this.debug("Found wallpaper image:", lastImage.src);
+                        this.lastObservedSrc = lastImage.src;
+                        this.handleWallpaperImageUrl(lastImage.src);
                         return; // Exit once we've found and processed an image
                     }
                 }
             }
         }
         
-        this.debug("No wallpaper images found in DOM");
-    },
-    
-    // Handle notifications from other modules
-    notificationReceived: function(notification, payload, sender) {
-        if (!this.loaded) {
-            return;
-        }
-        
-        this.debug("Received notification:", notification);
-        
-        // Listen for notifications from MMM-Wallpaper
-        if (notification === "WALLPAPER_CHANGED" && sender && sender.name === "MMM-Wallpaper") {
-            this.debug("Wallpaper changed notification from MMM-Wallpaper:", payload);
-            
-            if (payload && payload.url) {
-                this.handleNewWallpaperImage({src: payload.url});
-            }
-        }
-        
-        // Listen for WALLPAPER_URL notification (from patched MMM-Wallpaper)
-        if (notification === "WALLPAPER_URL" && sender && sender.name === "MMM-Wallpaper") {
-            this.debug("Received wallpaper URL from MMM-Wallpaper:", payload);
-            
-            if (payload) {
-                this.handleNewWallpaperImage({src: payload});
-            }
-        }
-        
-        // Listen for weather notifications
-        if (notification === "CURRENT_WEATHER" && this.config.enableWeatherColors) {
-            this.debug("Received current weather data:", payload);
-            
-            // Only apply weather color if it's higher priority than current color source
-            const currentPriority = this.config.priorityOrder.indexOf(this.currentColorSource);
-            const weatherPriority = this.config.priorityOrder.indexOf("weather");
-            
-            if (weatherPriority < currentPriority || currentPriority === -1) {
-                this.processWeatherData(payload);
-            }
-        }
+        // If no MMM-Wallpaper images found, check for any background images
+        this.checkForBackgroundImages();
     },
     
     // Socket notification received
@@ -565,6 +540,14 @@ Module.register("MMM-WallpaperColorExtractor", {
         
         // Return white for dark colors and black for light colors
         return luminance > 0.5 ? "#000000" : "#FFFFFF";
+    },
+    
+    // Clean up on stop
+    stop: function() {
+        if (this.observeTimer) {
+            clearInterval(this.observeTimer);
+            this.observeTimer = null;
+        }
     },
     
     // Override DOM generator
