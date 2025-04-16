@@ -25,7 +25,7 @@ Module.register("MMM-WallpaperColorExtractor", {
         priorityOrder: [
             "holiday", // Highest priority - if it's a holiday, use that color
    	        "wallpaper" // Fallback to wallpaper extraction
-			"weather", // If there's severe weather, use that color
+						"weather", // If there's severe weather, use that color
             "time",    // Time of day colors
 
         ],
