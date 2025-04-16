@@ -24,9 +24,10 @@ Module.register("MMM-WallpaperColorExtractor", {
         debugMode: true, // Set to false to reduce console output
         priorityOrder: [
             "holiday", // Highest priority - if it's a holiday, use that color
-            "weather", // If there's severe weather, use that color
+   	        "wallpaper" // Fallback to wallpaper extraction
+			"weather", // If there's severe weather, use that color
             "time",    // Time of day colors
-            "wallpaper" // Fallback to wallpaper extraction
+
         ],
         
         // Weather-based colors (to match compliments)
@@ -69,7 +70,6 @@ Module.register("MMM-WallpaperColorExtractor", {
 
             // Special Days - February
             "02-02": "#6B8E9F", // Groundhog Day (Cloudy blue-gray)
-            "02-11": "#FFB6C1", // Godmother Kim's Birthday (Light pink)
             "02-14": "#FF69B4", // Valentine's Day (Hot pink)
 
             // Special Days - March
@@ -78,55 +78,35 @@ Module.register("MMM-WallpaperColorExtractor", {
             "03-06": "#DC143C", // Casimir Pulaski Day (Polish flag red)
             "03-14": "#3141592", // Pi Day (A blue based on pi digits!)
             "03-17": "#00FF00", // St. Patrick's Day (Bright green)
-            "03-18": "#FFA0A0", // Keelee's Birthday (Light pink from your CSS)
-
+            
             // Special Days - April
-            "04-20": "#9932CC", // Godfather Tim's Birthday (Purple)
-            "04-28": "#000080", // Scotsman's Birthday (Navy blue - Scottish flag color)
-
+            
             // Special Days - May
             "05-04": "#4BD5EE", // Star Wars Day (Lightsaber blue)
             "05-05": "#FF4500", // Cinco de Mayo (Mexican flag red)
             "05-06": "#8B0000", // Revenge of the 6th (Sith red)
-            "05-23": "#FF69B4", // Godmother Erin's Birthday (Hot pink)
-            "05-25": "#A52A2A", // Billy's Adoptiversary (Warm brown)
-
+            
             // Special Days - June
-            "06-26": "#FFCC00", // IKEA Anniversary (IKEA yellow)
-
+            
             // Special Days - July
             "07-04": "#3C3B6E", // Independence Day (US flag blue)
-            "07-08": "#FF1493", // When you met (Deep pink - romantic)
-            "07-25": "#800080", // Mommy's Birthday (Purple)
-
+            
             // Special Days - August
             "08-01": "#2596be", // Colorado Day (Colorado flag blue)
 
             // Special Days - September
-            "09-08": "#4682B4", // Godfather Wally's Birthday (Steel blue)
-            "09-13": "#45E201", // Ridley's Birthday (Green from your CSS)
-
+            
             // Special Days - October
-            "10-01": "#8B4513", // Sherpa's Birthday (Dog-colored brown)
-            "10-15": "#0033AA", // Southwest Anniversary (Southwest Airlines blue)
-            "10-19": "#33CCFF", // Wally's Birthday & Anniversary (Blue from your CSS)
-            "10-22": "#400080", // Daddy's Birthday (Deep purple)
             "10-31": "#FF6700", // Halloween (Pumpkin orange)
 
             // Special Days - November
             "11-11": "#B22222", // Veterans Day (Firebrick red)
 
             // Special Days - December
-            "12-07": "#000080", // Pearl Harbor Day (Navy blue)
             "12-24": "#198754", // Christmas Eve (Christmas green)
             "12-25": "#FF0000", // Christmas (Red)
             "12-26": "#8E562E", // Boxing Day (Brown - cardboard box color)
-            "12-27": "#87CEEB", // Post Christmas (Light blue) 
-            "12-28": "#87CEEB", // Post Christmas (Light blue)
-            "12-29": "#87CEEB", // Post Christmas (Light blue)
-            "12-30": "#87CEEB", // Post Christmas (Light blue)
-            "12-31": "#C0C0C0", // New Year's Eve (Silver)
-
+            
             // Specific dates
             "2025-04-20": "#E6C9D1", // Easter 2025 (Light pink - Easter egg color)
             "2025-05-11": "#FFC0CB", // Mother's Day 2025 (Pink)
