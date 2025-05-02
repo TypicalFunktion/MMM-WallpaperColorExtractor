@@ -25,20 +25,16 @@ Module.register("MMM-WallpaperColorExtractor", {
         observeInterval: 2000, // How often to check the DOM for new wallpaper (in ms)
         priorityOrder: [
             "holiday", // Highest priority - if it's a holiday, use that color
-			"wallpaper", // Fallback to wallpaper extraction            
-			"weather", // If there's severe weather, use that color
+            "wallpaper", // Fallback to wallpaper extraction            
+            "weather", // If there's severe weather, use that color
             "time"    // Time of day colors
-            
         ],
         
         // Weather-based colors (to match compliments)
-        weatherColors: {
-        },
+        weatherColors: {},
         
         // Time-of-day colors (to match compliments)
-        timeColors: {
-            
-        },
+        timeColors: {},
         
         // Fallback color scheme to choose from if no good vibrant color is found
         fallbackColors: [
@@ -125,14 +121,13 @@ Module.register("MMM-WallpaperColorExtractor", {
             "2025-05-26": "#0000CD", // Memorial Day 2025 (Medium blue)
             "2025-06-15": "#000080", // Father's Day 2025 (Navy blue)
             "2025-09-01": "#4B6F44", // Labor Day 2025 (Worker's green)
-            "2025-11-27": "#CD853F", // Thanksgiving 2025 (Peru/tan - turkey color)
+            "2025-11-27": "#CD853F"  // Thanksgiving 2025 (Peru/tan - turkey color)
         },
         
         // Month-based seasonal colors (if no specific day is defined)
-        monthColors: {
-            
-        },
+        monthColors: {},
         
+        // WCAG and performance settings
         minContrastRatio: 4.5,     // WCAG 2.1 AA standard
         maxCacheAge: 24 * 60 * 60 * 1000, // 24 hours
         maxCacheSize: 50,
@@ -141,7 +136,7 @@ Module.register("MMM-WallpaperColorExtractor", {
             height: 600,
             fit: 'inside'
         },
-        colorUpdateDebounceDelay: 250,
+        colorUpdateDebounceDelay: 250
     },
     
     // Store state variables
