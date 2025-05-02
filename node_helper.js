@@ -29,6 +29,7 @@ module.exports = NodeHelper.create({
         this.checkCount = 0;
         this.searchedDirs = [];
         this.cachePath = path.join(__dirname, "cache");
+        this.config = null;
         
         // Create cache directory if it doesn't exist
         if (!fs.existsSync(this.cachePath)) {
@@ -42,17 +43,18 @@ module.exports = NodeHelper.create({
         
         if (notification === "SUBSCRIBE_WALLPAPER_CHANGES") {
             console.log("MMM-WallpaperColorExtractor: Subscribing to wallpaper changes");
+            this.config = payload.config;
             
             if (!this.isListening) {
                 // Start monitoring the wallpaper directory
-                this.findWallpaperDirectory(payload.config);
+                this.findWallpaperDirectory(this.config);
                 this.isListening = true;
             }
         }
         else if (notification === "EXTRACT_COLOR") {
             console.log(`MMM-WallpaperColorExtractor: Extracting color from: ${payload.imagePath}`);
             // Extract color from the image
-            this.extractColorFromImage(payload.imagePath, payload.config);
+            this.extractColorFromImage(payload.imagePath, payload.config || this.config);
         }
         else if (notification === "CHECK_WALLPAPER") {
             console.log("MMM-WallpaperColorExtractor: Manual check for wallpaper requested");
@@ -72,7 +74,7 @@ module.exports = NodeHelper.create({
         }
         else if (notification === "PROCESS_REMOTE_WALLPAPER") {
             console.log(`MMM-WallpaperColorExtractor: Processing remote wallpaper: ${payload.url}`);
-            this.processRemoteWallpaper(payload.url, payload.config);
+            this.processRemoteWallpaper(payload.url, payload.config || this.config);
         }
     },
     
@@ -217,7 +219,7 @@ module.exports = NodeHelper.create({
         }
 
         try {
-            const processedImage = await this.preprocessImage(imagePath);
+            const processedImage = await this.preprocessImage(imagePath, config);
             const palette = await Vibrant.from(processedImage)
                 .quality(5)
                 .maxColorCount(32)
@@ -496,14 +498,14 @@ module.exports = NodeHelper.create({
     /**
      * Preprocesses image for color extraction
      */
-    async preprocessImage: function(imagePath) {
+    async preprocessImage: function(imagePath, config) {
         const tempPath = path.join(this.cachePath, `temp_${path.basename(imagePath)}`);
         
         await sharp(imagePath)
             .resize(
-                this.config.imageResizeOptions.width,
-                this.config.imageResizeOptions.height,
-                { fit: this.config.imageResizeOptions.fit }
+                config.imageResizeOptions.width,
+                config.imageResizeOptions.height,
+                { fit: config.imageResizeOptions.fit }
             )
             .jpeg({ quality: 80 })
             .toFile(tempPath);
