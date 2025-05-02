@@ -132,6 +132,16 @@ Module.register("MMM-WallpaperColorExtractor", {
         monthColors: {
             
         },
+        
+        minContrastRatio: 4.5,     // WCAG 2.1 AA standard
+        maxCacheAge: 24 * 60 * 60 * 1000, // 24 hours
+        maxCacheSize: 50,
+        imageResizeOptions: {
+            width: 800,
+            height: 600,
+            fit: 'inside'
+        },
+        colorUpdateDebounceDelay: 250,
     },
     
     // Store state variables

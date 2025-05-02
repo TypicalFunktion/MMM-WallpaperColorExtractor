@@ -1,27 +1,23 @@
 # MMM-WallpaperColorExtractor
 
-A [MagicMirror²](https://github.com/MichMich/MagicMirror) module that extracts vibrant colors from your wallpaper image and updates CSS variables to dynamically theme your mirror.
-
-This module works great with modules that display wallpapers like MMM-Wallpaper.
+A MagicMirror² module that dynamically extracts accent colors from your wallpaper to create a cohesive and adaptive theme for your mirror. This module works in conjunction with wallpaper modules like MMM-Background or MMM-Wallpaper to automatically update text colors based on the current background image.
 
 ## Features
 
-- Extracts vibrant or muted colors from the current wallpaper
-- Dynamically updates CSS variables to theme your mirror
-- Special colors for holidays and seasons
-- Fallback to attractive color palette if extraction fails
-- Can be configured to use different color extraction methods
-
-## Screenshots
-
-![Example of changing highlight colors](https://example.com/placeholder-image.jpg)
-*Example showing how the highlight color changes based on the wallpaper*
+- 🎨 Automatic color extraction from wallpapers
+- 🌈 WCAG 2.1 compliant contrast ratios for better readability
+- 🎅 Holiday-specific color themes
+- ⛈️ Weather-based color adaptation
+- 🌅 Time-of-day color changes
+- 💾 Efficient image caching system
+- 🖼️ Smart image preprocessing for better performance
+- 🎯 Intelligent color selection based on visibility and aesthetics
 
 ## Installation
 
-1. Navigate to your MagicMirror's `modules` folder:
+1. Navigate to your MagicMirror's modules directory:
 ```bash
-cd ~/MagicMirror/modules/
+cd ~/MagicMirror/modules
 ```
 
 2. Clone this repository:
@@ -35,102 +31,130 @@ cd MMM-WallpaperColorExtractor
 npm install
 ```
 
-## Requirements
+## Configuration
 
-- MagicMirror² v2.8.0 or later
-- A module that displays wallpapers (like MMM-Wallpaper)
-- Your CSS should be using the variable that this module will update (by default `--color-text-highlight`)
-
-## Using the module
-
-Add the module configuration to your `config/config.js` file:
+Add the following to your `config/config.js`:
 
 ```javascript
-modules: [
-    {
-        module: "MMM-WallpaperColorExtractor",
-        position: "bottom_bar", // The position doesn't matter as this module is hidden
-        config: {
-            // See configuration options below
-            colorExtractionMethod: "vibrant", // vibrant, muted, or random
-            updateInterval: 10 * 1000, // 10 seconds - how often to check for color changes
-            targetVariable: "--color-text-highlight" // CSS variable to update
-        }
-    },
-    // ... your other modules
-]
+{
+    module: "MMM-WallpaperColorExtractor",
+    config: {
+        // Basic settings
+        updateInterval: 10000,           // How often to check for changes (ms)
+        defaultColor: "#90d5ff",         // Fallback color if extraction fails
+        targetVariable: "--color-text-highlight", // CSS variable to update
+        debugMode: false,                // Enable for detailed logging
+
+        // Color selection settings
+        minContrastRatio: 4.5,          // WCAG 2.1 AA standard
+        minBrightness: 0.5,             // Minimum brightness (0-1)
+        maxBrightness: 0.9,             // Maximum brightness (0-1)
+        minSaturation: 0.4,             // Minimum saturation (0-1)
+        colorExtractionMethod: "vibrant", // vibrant, muted, or random
+
+        // Feature toggles
+        disableHolidayColors: false,     // Set to true to disable holiday colors
+        enableWeatherColors: true,       // Enable weather-based colors
+        enableTimeColors: true,          // Enable time-of-day colors
+
+        // Performance settings
+        samplingRatio: 0.1,             // Sample 10% of pixels for large images
+        observeInterval: 2000,           // DOM check interval (ms)
+        maxCacheAge: 24 * 60 * 60 * 1000, // Cache lifetime (24 hours)
+        maxCacheSize: 50,               // Maximum cached images
+    }
+}
 ```
 
-## Configuration options
+### Configuration Options
 
-| Option                   | Description                                                                                            | Default Value           |
-|--------------------------|--------------------------------------------------------------------------------------------------------|-------------------------|
-| `updateInterval`         | How often to check for color changes (in milliseconds)                                                | `10 * 1000` (10 seconds)|
-| `animationSpeed`         | Speed of color transition animation (in milliseconds)                                                 | `2 * 1000` (2 seconds)  |
-| `defaultColor`           | Default color to use if extraction fails                                                              | `"#90d5ff"`            |
-| `minBrightness`          | Minimum brightness for extracted colors (0-1)                                                         | `0.5`                  |
-| `maxBrightness`          | Maximum brightness for extracted colors (0-1)                                                         | `0.9`                  |
-| `minSaturation`          | Minimum saturation for extracted colors (0-1)                                                         | `0.4`                  |
-| `targetVariable`         | CSS variable to update with the extracted color                                                       | `"--color-text-highlight"` |
-| `colorExtractionMethod`  | Method to extract colors: "vibrant", "muted", or "random"                                             | `"vibrant"`            |
-| `disableHolidayColors`   | Set to `true` to disable special holiday colors                                                       | `false`                |
-| `wallpaperDir`           | Manually specify the wallpaper directory (optional)                                                   | `""`                   |
-| `samplingRatio`          | Portion of pixels to sample for large images (0-1)                                                    | `0.1`                  |
-| `fallbackColors`         | Array of colors to randomly choose from if extraction fails                                           | Array of pastel colors  |
-| `holidayColors`          | Object mapping "MM-DD" dates to colors for holidays                                                   | Various holiday colors  |
-| `monthColors`            | Object mapping "MM" months to seasonal colors                                                         | October, December colors|
+| Option | Description | Default | Type |
+|--------|-------------|---------|------|
+| `updateInterval` | How often to check for changes | 10000 | Number (ms) |
+| `defaultColor` | Fallback color if extraction fails | "#90d5ff" | String (hex) |
+| `targetVariable` | CSS variable to update | "--color-text-highlight" | String |
+| `minContrastRatio` | WCAG 2.1 contrast ratio | 4.5 | Number |
+| `minBrightness` | Minimum brightness | 0.5 | Number (0-1) |
+| `maxBrightness` | Maximum brightness | 0.9 | Number (0-1) |
+| `minSaturation` | Minimum saturation | 0.4 | Number (0-1) |
+| `colorExtractionMethod` | Color selection method | "vibrant" | String |
+| `debugMode` | Enable detailed logging | false | Boolean |
 
-See [Example-Config.md](Example-Config.md) for more configuration examples.
+## Color Priority Order
 
-## Customize your CSS
+Colors are selected based on the following priority (configurable):
+1. Holiday colors (if date matches)
+2. Wallpaper extracted colors
+3. Weather-based colors (if enabled)
+4. Time-of-day colors (if enabled)
+5. Fallback colors
 
-For this module to work effectively, your custom.css should be using CSS variables for colors. Here's an example of how to structure your CSS:
+## Holiday Colors
 
-```css
-:root {
-   --color-text-dimmed: #90d5ff;
-   --color-text-highlight: #90d5ff; /* This will be dynamically updated */
-   
-   /* Your other color variables */
-   --color-text: #fff;
-   --color-text-bright: #fff;
-   /* etc. */
+The module includes special colors for various holidays and special dates. You can customize these in the configuration. Example:
+
+```javascript
+holidayColors: {
+    "12-25": "#FF0000", // Christmas (Red)
+    "10-31": "#FF6700", // Halloween (Orange)
+    "03-17": "#00FF00", // St. Patrick's Day (Green)
 }
-
-/* Then use the variables in your styles */
-.calendar tr:before {
-  background-color: var(--color-text-highlight);
-}
-
-.compliments {
-  border-left: 4px solid var(--color-text-highlight);
-  border-right: 4px solid var(--color-text-highlight);
-}
-
-/* etc. */
 ```
 
 ## Troubleshooting
 
-- If colors aren't changing, make sure your CSS is using the variable specified in `targetVariable`
-- Check the browser console and server logs for any errors
-- Verify that the wallpaper path is correctly detected by checking the logs
-- If the module can't find your wallpaper directory automatically, specify it manually in the config
+### Common Issues
+
+1. **Colors not updating:**
+   - Check if your wallpaper module is properly configured
+   - Enable `debugMode` for detailed logging
+   - Verify the module has proper permissions to read images
+
+2. **Performance issues:**
+   - Reduce `updateInterval` value
+   - Lower `samplingRatio` for large images
+   - Adjust `maxCacheSize` based on available memory
+   - Increase `observeInterval` if CPU usage is high
+
+3. **Colors too bright/dark:**
+   - Adjust `minBrightness` and `maxBrightness`
+   - Modify `minSaturation` for color intensity
+   - Change `minContrastRatio` for better readability
+
+### Debug Mode
+
+Enable debug mode in your config to see detailed logs:
+```javascript
+debugMode: true
+```
 
 ## Compatibility
 
-This module works best with:
-- MMM-Wallpaper
-- Any modules that use CSS variables for styling
+- MagicMirror²: `>= 2.0.0`
+- Node.js: `>= 14`
+- Compatible with most wallpaper/background modules:
+  - MMM-Background
+  - MMM-Wallpaper
+  - Default background module
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Pull requests are welcome! For major changes, please open an issue first to discuss what you would like to change.
 
 ## License
 
-This project is licensed under the MIT License
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Author
+## Acknowledgments
 
-Created by TypicalFunktion
+- Thanks to the MagicMirror² community
+- Built with [node-vibrant](https://github.com/Vibrant-Colors/node-vibrant)
+- Color accessibility standards based on WCAG 2.1
+
+## Support
+
+If you find this module helpful, please consider:
+- Starring the repository
+- Reporting issues
+- Contributing improvements
+- Sharing with the MagicMirror community

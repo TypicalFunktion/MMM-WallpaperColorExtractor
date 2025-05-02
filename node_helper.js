@@ -14,6 +14,9 @@ const http = require('http');
 const https = require('https');
 const url = require('url');
 const crypto = require('crypto');
+const sharp = require('sharp');
+const Color = require('color');
+const _ = require('lodash');
 
 module.exports = NodeHelper.create({
     // Initialize the helper
@@ -202,165 +205,41 @@ module.exports = NodeHelper.create({
     },
     
     // Extract color from image using node-vibrant
-    extractColorFromImage: function(imagePath, config) {
+    extractColorFromImage: async function(imagePath, config) {
         if (!imagePath) {
-            console.log("MMM-WallpaperColorExtractor: No image path provided");
-            this.sendSocketNotification("COLOR_EXTRACTED", {
-                success: false,
-                color: config.defaultColor,
-                source: "error-no-path"
-            });
-            return;
-        }
-        
-        // Check if file exists
-        const fileExists = fs.existsSync(imagePath);
-        console.log(`MMM-WallpaperColorExtractor: File exists: ${fileExists} - ${imagePath}`);
-        
-        if (!fileExists) {
-            console.log(`MMM-WallpaperColorExtractor: File does not exist: ${imagePath}`);
-            this.sendSocketNotification("COLOR_EXTRACTED", {
-                success: false,
-                color: config.defaultColor,
-                source: "error-file-not-found",
-                error: `File not found: ${imagePath}`
-            });
+            this.sendErrorResponse(config, "No image path provided");
             return;
         }
 
-        console.log(`MMM-WallpaperColorExtractor: Extracting color from: ${imagePath}`);
-        
+        if (!fs.existsSync(imagePath)) {
+            this.sendErrorResponse(config, `File not found: ${imagePath}`);
+            return;
+        }
+
         try {
-            // Using Vibrant v4.x API
-            Vibrant.from(imagePath)
-                .quality(5) // Lower quality for better performance
-                .maxColorCount(64) // Number of colors to extract
-                .getPalette()
-                .then((palette) => {
-                    console.log(`MMM-WallpaperColorExtractor: Successfully got palette for: ${imagePath}`);
-                    // Log available swatches
-                    for (let key in palette) {
-                        if (palette[key]) {
-                            console.log(`MMM-WallpaperColorExtractor: Found swatch: ${key} - ${palette[key].hex}`);
-                        }
-                    }
-                    
-                    let selectedColor = null;
-                    
-                    // Choose color based on extraction method
-                    switch (config.colorExtractionMethod) {
-                        case "vibrant":
-                            if (palette.Vibrant) {
-                                selectedColor = palette.Vibrant.hex;
-                                console.log(`MMM-WallpaperColorExtractor: Selected Vibrant swatch: ${selectedColor}`);
-                            } else if (palette.LightVibrant) {
-                                selectedColor = palette.LightVibrant.hex;
-                                console.log(`MMM-WallpaperColorExtractor: Selected LightVibrant swatch: ${selectedColor}`);
-                            }
-                            break;
-                        case "muted":
-                            if (palette.Muted) {
-                                selectedColor = palette.Muted.hex;
-                                console.log(`MMM-WallpaperColorExtractor: Selected Muted swatch: ${selectedColor}`);
-                            } else if (palette.LightMuted) {
-                                selectedColor = palette.LightMuted.hex;
-                                console.log(`MMM-WallpaperColorExtractor: Selected LightMuted swatch: ${selectedColor}`);
-                            }
-                            break;
-                        case "random":
-                        default:
-                            // Try to find a good color from all available swatches
-                            const allSwatches = [];
-                            for (let key in palette) {
-                                if (palette[key]) {
-                                    allSwatches.push(palette[key]);
-                                }
-                            }
-                            
-                            console.log(`MMM-WallpaperColorExtractor: Found ${allSwatches.length} total swatches`);
-                            
-                            // Filter swatches by brightness and saturation
-                            const goodSwatches = allSwatches.filter((swatch) => {
-                                const rgb = swatch.rgb;
-                                const hsl = this.rgbToHsl(rgb[0], rgb[1], rgb[2]);
-                                
-                                const meetsMinSaturation = hsl[1] >= config.minSaturation;
-                                const meetsMinBrightness = hsl[2] >= config.minBrightness;
-                                const meetMaxBrightness = hsl[2] <= config.maxBrightness;
-                                
-                                console.log(`MMM-WallpaperColorExtractor: Swatch ${swatch.hex} - HSL: ${hsl[0].toFixed(2)}, ${hsl[1].toFixed(2)}, ${hsl[2].toFixed(2)} - Min Sat: ${meetsMinSaturation} - Min Bright: ${meetsMinBrightness} - Max Bright: ${meetMaxBrightness}`);
-                                
-                                return (meetsMinSaturation && meetsMinBrightness && meetMaxBrightness);
-                            });
-                            
-                            console.log(`MMM-WallpaperColorExtractor: Found ${goodSwatches.length} good swatches after filtering`);
-                            
-                            if (goodSwatches.length > 0) {
-                                // Pick a random good swatch
-                                const randomIndex = Math.floor(Math.random() * goodSwatches.length);
-                                selectedColor = goodSwatches[randomIndex].hex;
-                                console.log(`MMM-WallpaperColorExtractor: Selected random swatch: ${selectedColor}`);
-                            }
-                            break;
-                    }
-                    
-                    // If no suitable color found, use a random color from fallback list
-                    let success = true;
-                    let colorSource = "";
-                    
-                    if (!selectedColor) {
-                        const fallbackIndex = Math.floor(Math.random() * config.fallbackColors.length);
-                        selectedColor = config.fallbackColors[fallbackIndex];
-                        success = false;
-                        colorSource = "fallback";
-                        console.log(`MMM-WallpaperColorExtractor: Using fallback color: ${selectedColor}`);
-                    } else {
-                        if (config.colorExtractionMethod === "vibrant") {
-                            colorSource = palette.Vibrant ? "vibrant" : "light-vibrant";
-                        } else if (config.colorExtractionMethod === "muted") {
-                            colorSource = palette.Muted ? "muted" : "light-muted";
-                        } else {
-                            colorSource = "random-filtered";
-                        }
-                        console.log(`MMM-WallpaperColorExtractor: Extracted color: ${selectedColor} (source: ${colorSource})`);
-                    }
-                    
-                    // Send the color back to the module with detailed info
-                    console.log(`MMM-WallpaperColorExtractor: Sending COLOR_EXTRACTED notification with color: ${selectedColor}`);
-                    this.sendSocketNotification("COLOR_EXTRACTED", {
-                        success: success,
-                        color: selectedColor,
-                        source: colorSource,
-                        method: config.colorExtractionMethod,
-                        fileInfo: path.basename(imagePath)
-                    });
-                })
-                .catch((error) => {
-                    console.log("MMM-WallpaperColorExtractor: Error extracting color", error);
-                    // Use fallback color
-                    const fallbackIndex = Math.floor(Math.random() * config.fallbackColors.length);
-                    const fallbackColor = config.fallbackColors[fallbackIndex];
-                    
-                    this.sendSocketNotification("COLOR_EXTRACTED", {
-                        success: false,
-                        color: fallbackColor,
-                        source: "error-fallback",
-                        method: config.colorExtractionMethod,
-                        fileInfo: path.basename(imagePath),
-                        error: error.message
-                    });
-                });
-        } catch (outerError) {
-            console.log("MMM-WallpaperColorExtractor: Outer error during extraction", outerError);
-            const fallbackIndex = Math.floor(Math.random() * config.fallbackColors.length);
-            const fallbackColor = config.fallbackColors[fallbackIndex];
+            const processedImage = await this.preprocessImage(imagePath);
+            const palette = await Vibrant.from(processedImage)
+                .quality(5)
+                .maxColorCount(32)
+                .getPalette();
+
+            // Clean up temporary file
+            fs.unlinkSync(processedImage);
+
+            if (!palette) {
+                throw new Error("Failed to extract palette");
+            }
+
+            let selectedColor = this.selectColorFromPalette(palette, config);
             
             this.sendSocketNotification("COLOR_EXTRACTED", {
-                success: false,
-                color: fallbackColor,
-                source: "outer-error-fallback",
-                error: outerError.message
+                success: true,
+                color: selectedColor,
+                source: "vibrant"
             });
+
+        } catch (error) {
+            this.sendErrorResponse(config, error.message);
         }
     },
     
@@ -571,5 +450,115 @@ module.exports = NodeHelper.create({
             clearInterval(this.watchTimer);
             this.watchTimer = null;
         }
+    },
+
+    /**
+     * Ensures cache directory exists and is clean
+     */
+    ensureCacheDirectory: function() {
+        if (!fs.existsSync(this.cachePath)) {
+            fs.mkdirSync(this.cachePath, { recursive: true });
+        }
+        this.cleanupCache();
+    },
+
+    /**
+     * Cleans up old cached files
+     */
+    cleanupCache: function() {
+        const files = fs.readdirSync(this.cachePath);
+        const now = Date.now();
+        
+        files.forEach(file => {
+            const filePath = path.join(this.cachePath, file);
+            const stats = fs.statSync(filePath);
+            
+            if (now - stats.mtime.getTime() > this.config.maxCacheAge) {
+                fs.unlinkSync(filePath);
+            }
+        });
+
+        // If we still have too many files, remove oldest
+        if (files.length > this.config.maxCacheSize) {
+            const sortedFiles = files
+                .map(file => ({
+                    path: path.join(this.cachePath, file),
+                    mtime: fs.statSync(path.join(this.cachePath, file)).mtime
+                }))
+                .sort((a, b) => a.mtime - b.mtime);
+
+            for (let i = 0; i < sortedFiles.length - this.config.maxCacheSize; i++) {
+                fs.unlinkSync(sortedFiles[i].path);
+            }
+        }
+    },
+
+    /**
+     * Preprocesses image for color extraction
+     */
+    async preprocessImage: function(imagePath) {
+        const tempPath = path.join(this.cachePath, `temp_${path.basename(imagePath)}`);
+        
+        await sharp(imagePath)
+            .resize(
+                this.config.imageResizeOptions.width,
+                this.config.imageResizeOptions.height,
+                { fit: this.config.imageResizeOptions.fit }
+            )
+            .jpeg({ quality: 80 })
+            .toFile(tempPath);
+            
+        return tempPath;
+    },
+
+    /**
+     * Selects appropriate color from palette based on config
+     */
+    selectColorFromPalette: function(palette, config) {
+        const validSwatches = [];
+        
+        for (const [name, swatch] of Object.entries(palette)) {
+            if (!swatch) continue;
+            
+            const { population, rgb } = swatch;
+            const [r, g, b] = rgb;
+            
+            // Calculate color properties
+            const color = Color(rgb);
+            const brightness = color.lightness() / 100;
+            const saturation = color.saturationl() / 100;
+            
+            if (brightness >= config.minBrightness &&
+                brightness <= config.maxBrightness &&
+                saturation >= config.minSaturation) {
+                validSwatches.push({
+                    name,
+                    color: swatch.hex,
+                    population,
+                    brightness
+                });
+            }
+        }
+        
+        if (validSwatches.length === 0) {
+            return config.defaultColor;
+        }
+        
+        // Sort by population and select most prominent color
+        validSwatches.sort((a, b) => b.population - a.population);
+        return validSwatches[0].color;
+    },
+
+    /**
+     * Sends error response to the frontend
+     */
+    sendErrorResponse: function(config, errorMessage) {
+        console.error(`MMM-WallpaperColorExtractor: ${errorMessage}`);
+        this.sendSocketNotification("COLOR_EXTRACTED", {
+            success: false,
+            color: config.defaultColor,
+            source: "error",
+            error: errorMessage
+        });
     }
 });
