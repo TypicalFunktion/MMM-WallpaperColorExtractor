@@ -8,7 +8,7 @@
 Module.register("MMM-WallpaperColorExtractor", {
     // Default module config
     defaults: {
-        updateInterval: 10 * 1000, // 10 seconds
+        updateInterval: 10000,
         animationSpeed: 2 * 1000, // 2 seconds
         defaultColor: "#90d5ff",   // Default color if extraction fails
         minBrightness: 0.5,        // Minimum brightness (0-1)
@@ -23,12 +23,7 @@ Module.register("MMM-WallpaperColorExtractor", {
         samplingRatio: 0.1, // Sample 10% of the pixels for large images
         debugMode: true, // Set to false to reduce console output
         observeInterval: 2000, // How often to check the DOM for new wallpaper (in ms)
-        priorityOrder: [
-            "holiday", // Highest priority - if it's a holiday, use that color
-            "wallpaper", // Fallback to wallpaper extraction            
-            "weather", // If there's severe weather, use that color
-            "time"    // Time of day colors
-        ],
+        priorityOrder: ["holiday", "wallpaper", "weather", "time"],
         
         // Weather-based colors (to match compliments)
         weatherColors: {},
@@ -37,18 +32,7 @@ Module.register("MMM-WallpaperColorExtractor", {
         timeColors: {},
         
         // Fallback color scheme to choose from if no good vibrant color is found
-        fallbackColors: [
-            "#90d5ff", // Light Blue (Original)
-            "#FF9AA2", // Light Red
-            "#FFB347", // Light Orange
-            "#B5EAD7", // Light Green
-            "#C7CEEA", // Light Purple
-            "#FFDAC1", // Light Peach
-            "#AEC6CF", // Pastel Blue
-            "#77DD77", // Pastel Green
-            "#FFB6C1", // Light Pink
-            "#E6E6FA"  // Lavender
-        ],
+        fallbackColors: ["#90d5ff", "#FF9AA2", "#FFB347"],
         
         // Special colors for holidays/seasons (format: "MM-DD": "#hexcolor")
         holidayColors: {
