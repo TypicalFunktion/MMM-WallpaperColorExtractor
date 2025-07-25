@@ -1,27 +1,49 @@
 {
   "name": "MMM-WallpaperColorExtractor",
-  "version": "1.1.0",
-  "description": "Magic Mirror module to extract vibrant colors from wallpaper for theming",
+  "version": "2.0.0",
+  "description": "Magic Mirror module to extract vibrant colors from wallpaper for theming with enhanced performance, error handling, and multiple CSS variable support",
   "main": "MMM-WallpaperColorExtractor.js",
   "scripts": {
     "postinstall": "npm install node-vibrant@latest",
     "lint": "eslint .",
-    "test": "jest"
+    "test": "jest",
+    "start": "node MMM-WallpaperColorExtractor.js",
+    "dev": "nodemon MMM-WallpaperColorExtractor.js",
+    "clean": "rm -rf cache/*",
+    "cache-stats": "node -e \"console.log('Cache statistics:'); require('./node_helper.js').getStats()\""
   },
   "keywords": [
     "magicmirror",
     "module",
     "theme",
     "color",
-    "accessibility"
+    "accessibility",
+    "wallpaper",
+    "dynamic",
+    "adaptive",
+    "performance",
+    "caching"
   ],
   "author": "TypicalFunktion",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TypicalFunktion/MMM-WallpaperColorExtractor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TypicalFunktion/MMM-WallpaperColorExtractor/issues"
+  },
+  "homepage": "https://github.com/TypicalFunktion/MMM-WallpaperColorExtractor#readme",
   "dependencies": {
     "color": "^4.2.3",
     "lodash": "^4.17.21",
     "node-vibrant": "^4.0.2",
     "sharp": "^0.32.6"
+  },
+  "devDependencies": {
+    "eslint": "^8.0.0",
+    "jest": "^29.0.0",
+    "nodemon": "^3.0.0"
   },
   "overrides": {
     "phin": "^3.7.0",
@@ -30,5 +52,19 @@
   },
   "engines": {
     "node": ">=14"
-  }
+  },
+  "peerDependencies": {
+    "magicmirror": ">=2.0.0"
+  },
+  "optionalDependencies": {
+    "sharp": "^0.32.6"
+  },
+  "files": [
+    "MMM-WallpaperColorExtractor.js",
+    "node_helper.js",
+    "package.json",
+    "README.md",
+    "INSTALLATION.md",
+    "EXAMPLE-CONFIG.md"
+  ]
 }

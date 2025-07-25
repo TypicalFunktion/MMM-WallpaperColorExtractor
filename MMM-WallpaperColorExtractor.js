@@ -8,6 +8,7 @@
 Module.register("MMM-WallpaperColorExtractor", {
     // Default module config
     defaults: {
+        // Basic settings
         updateInterval: 10000,
         animationSpeed: 2 * 1000, // 2 seconds
         defaultColor: "#90d5ff",   // Default color if extraction fails
@@ -16,14 +17,35 @@ Module.register("MMM-WallpaperColorExtractor", {
         minSaturation: 0.4,        // Minimum saturation (0-1)
         targetVariable: "--color-text-highlight", // CSS variable to update
         colorExtractionMethod: "vibrant", // vibrant, muted, or random
+        
+        // Multiple CSS variables support
+        cssVariables: {
+            primary: "--color-text-highlight",
+            secondary: "--color-text-highlight-secondary",
+            accent: "--color-accent",
+            border: "--color-border"
+        },
+        
+        // Feature toggles
         disableHolidayColors: false, // Set to true to disable special holiday colors
         enableWeatherColors: true, // Enable weather-based colors
         enableTimeColors: true,    // Enable time-of-day-based colors
+        enableMultipleVariables: false, // Enable multiple CSS variable updates
+        
+        // Performance settings
         wallpaperDir: "", // Path to your wallpaper directory (leave empty for auto-detection)
         samplingRatio: 0.1, // Sample 10% of the pixels for large images
-        debugMode: true, // Set to false to reduce console output
+        debugMode: false, // Set to false to reduce console output
         observeInterval: 2000, // How often to check the DOM for new wallpaper (in ms)
         priorityOrder: ["holiday", "wallpaper", "weather", "time"],
+        
+        // Error handling and retry settings
+        maxRetries: 3,
+        retryDelay: 1000,
+        timeout: 10000,
+        
+        // Configuration presets
+        preset: "default", // "default", "vibrant", "subtle", "accessible", "performance"
         
         // Weather-based colors (to match compliments)
         weatherColors: {},
@@ -123,6 +145,35 @@ Module.register("MMM-WallpaperColorExtractor", {
         colorUpdateDebounceDelay: 250
     },
     
+    // Configuration presets
+    presets: {
+        vibrant: {
+            colorExtractionMethod: "vibrant",
+            minBrightness: 0.6,
+            minSaturation: 0.5,
+            updateInterval: 5000
+        },
+        subtle: {
+            colorExtractionMethod: "muted",
+            minBrightness: 0.4,
+            maxBrightness: 0.7,
+            minSaturation: 0.3,
+            updateInterval: 10000
+        },
+        accessible: {
+            minContrastRatio: 7.0,
+            colorExtractionMethod: "vibrant",
+            minBrightness: 0.5,
+            maxBrightness: 0.8
+        },
+        performance: {
+            updateInterval: 30000,
+            samplingRatio: 0.05,
+            observeInterval: 5000,
+            maxCacheSize: 25
+        }
+    },
+    
     // Store state variables
     currentColor: null,
     currentColorSource: null,
@@ -130,39 +181,111 @@ Module.register("MMM-WallpaperColorExtractor", {
     lastObservedSrc: null,
     observeTimer: null,
     wallpaperObserver: null,
+    retryCount: 0,
+    isProcessing: false,
     
-    // Debug logging function
+    // Debug logging function with enhanced error handling
     debug: function(...args) {
         if (this.config.debugMode) {
             console.log("MMM-WallpaperColorExtractor [DEBUG]:", ...args);
         }
     },
     
-    // Override start method
+    // Error logging function
+    logError: function(error, context = "") {
+        console.error(`MMM-WallpaperColorExtractor [ERROR]${context ? ` [${context}]` : ""}:`, error);
+        
+        // Send error notification to node helper for potential recovery
+        this.sendSocketNotification("ERROR_OCCURRED", {
+            error: error.message || error,
+            context: context,
+            timestamp: Date.now()
+        });
+    },
+    
+    // Apply configuration preset
+    applyPreset: function(presetName) {
+        if (this.presets[presetName]) {
+            this.debug(`Applying preset: ${presetName}`);
+            Object.assign(this.config, this.presets[presetName]);
+        } else {
+            this.logError(`Unknown preset: ${presetName}`, "CONFIG");
+        }
+    },
+    
+    // Validate configuration
+    validateConfig: function() {
+        const errors = [];
+        
+        if (this.config.minBrightness < 0 || this.config.minBrightness > 1) {
+            errors.push("minBrightness must be between 0 and 1");
+        }
+        if (this.config.maxBrightness < 0 || this.config.maxBrightness > 1) {
+            errors.push("maxBrightness must be between 0 and 1");
+        }
+        if (this.config.minSaturation < 0 || this.config.minSaturation > 1) {
+            errors.push("minSaturation must be between 0 and 1");
+        }
+        if (this.config.minContrastRatio < 1 || this.config.minContrastRatio > 21) {
+            errors.push("minContrastRatio must be between 1 and 21");
+        }
+        if (this.config.maxRetries < 0) {
+            errors.push("maxRetries must be non-negative");
+        }
+        
+        if (errors.length > 0) {
+            this.logError(`Configuration validation failed: ${errors.join(", ")}`, "CONFIG");
+            return false;
+        }
+        
+        return true;
+    },
+    
+    // Override start method with enhanced error handling
     start: function() {
         Log.info("Starting module: " + this.name);
-        this.debug("Module configuration:", JSON.stringify(this.config));
         
-        this.currentColor = this.config.defaultColor;
-        this.loaded = false;
-        
-        // Set the initial CSS variable
-        this.updateCssVariable(this.currentColor, "default");
-        
-        // Subscribe to notifications
-        this.debug("Subscribing to notifications");
-        
-        // Subscribe to wallpaper change notifications
-        this.debug("Sending SUBSCRIBE_WALLPAPER_CHANGES notification");
-        this.sendSocketNotification("SUBSCRIBE_WALLPAPER_CHANGES", {
-            config: this.config
-        });
-        
-        // Check holiday color at startup (highest priority)
-        this.checkHolidayColor();
-        
-        // Start DOM observation manually to avoid relying on MMM-Wallpaper notifications
-        this.loaded = true;
+        try {
+            // Apply preset if specified
+            if (this.config.preset && this.config.preset !== "default") {
+                this.applyPreset(this.config.preset);
+            }
+            
+            // Validate configuration
+            if (!this.validateConfig()) {
+                this.logError("Module failed to start due to configuration errors", "STARTUP");
+                return;
+            }
+            
+            this.debug("Module configuration:", JSON.stringify(this.config));
+            
+            this.currentColor = this.config.defaultColor;
+            this.loaded = false;
+            this.retryCount = 0;
+            this.isProcessing = false;
+            
+            // Set the initial CSS variable
+            this.updateCssVariables(this.currentColor, "default");
+            
+            // Subscribe to notifications
+            this.debug("Subscribing to notifications");
+            
+            // Subscribe to wallpaper change notifications
+            this.debug("Sending SUBSCRIBE_WALLPAPER_CHANGES notification");
+            this.sendSocketNotification("SUBSCRIBE_WALLPAPER_CHANGES", {
+                config: this.config
+            });
+            
+            // Check holiday color at startup (highest priority)
+            this.checkHolidayColor();
+            
+            // Start DOM observation manually to avoid relying on MMM-Wallpaper notifications
+            this.loaded = true;
+            
+            this.debug("Module started successfully");
+        } catch (error) {
+            this.logError(error, "STARTUP");
+        }
     },
     
     // After DOM is ready, set up observation of wallpaper changes
@@ -328,6 +451,19 @@ Module.register("MMM-WallpaperColorExtractor", {
             this.processNewWallpaper(payload.wallpaperPath);
         } 
         else if (notification === "COLOR_EXTRACTED") {
+            this.handleColorExtractionResult(payload);
+        }
+        else if (notification === "ERROR_OCCURRED") {
+            this.handleNodeHelperError(payload);
+        }
+        else if (notification === "PERFORMANCE_METRICS") {
+            this.handlePerformanceMetrics(payload);
+        }
+    },
+    
+    // Handle color extraction results with retry logic
+    handleColorExtractionResult: function(payload) {
+        try {
             if (payload && payload.color) {
                 // Create a detailed source description
                 let sourceInfo = "unknown";
@@ -350,13 +486,87 @@ Module.register("MMM-WallpaperColorExtractor", {
                     this.debug("Applying wallpaper color:", payload.color);
                     this.currentColor = payload.color;
                     this.currentColorSource = "wallpaper";
-                    this.updateCssVariable(this.currentColor, sourceInfo);
+                    this.updateCssVariables(this.currentColor, sourceInfo);
+                    
+                    // Reset retry count on success
+                    this.retryCount = 0;
+                    this.isProcessing = false;
                 } else {
                     this.debug("Not applying wallpaper color due to priority. Current source:", 
                               this.currentColorSource, "Priority:", currentPriority);
                 }
+            } else if (payload && payload.success === false) {
+                this.handleExtractionError(payload);
             }
+        } catch (error) {
+            this.logError(error, "COLOR_EXTRACTION_HANDLER");
         }
+    },
+    
+    // Handle extraction errors with retry logic
+    handleExtractionError: function(payload) {
+        this.logError(`Color extraction failed: ${payload.error}`, "EXTRACTION");
+        
+        if (this.retryCount < this.config.maxRetries) {
+            this.retryCount++;
+            this.debug(`Retrying color extraction (attempt ${this.retryCount}/${this.config.maxRetries})`);
+            
+            setTimeout(() => {
+                this.retryColorExtraction();
+            }, this.config.retryDelay * this.retryCount);
+        } else {
+            this.debug("Max retries reached, using fallback color");
+            this.useFallbackColor();
+            this.retryCount = 0;
+            this.isProcessing = false;
+        }
+    },
+    
+    // Handle node helper errors
+    handleNodeHelperError: function(payload) {
+        this.logError(`Node helper error: ${payload.error}`, payload.context);
+        
+        // Send error to node helper for potential recovery
+        this.sendSocketNotification("ERROR_RECOVERY", {
+            error: payload.error,
+            context: payload.context,
+            timestamp: payload.timestamp
+        });
+    },
+    
+    // Handle performance metrics
+    handlePerformanceMetrics: function(payload) {
+        this.debug("Performance metrics:", payload);
+        
+        // Log performance issues
+        if (payload.extractionTime > 5000) {
+            this.debug("Slow color extraction detected:", payload.extractionTime + "ms");
+        }
+        
+        if (payload.cacheHitRate < 0.5) {
+            this.debug("Low cache hit rate:", payload.cacheHitRate);
+        }
+    },
+    
+    // Retry color extraction
+    retryColorExtraction: function() {
+        if (this.currentWallpaperURL) {
+            this.debug("Retrying color extraction for:", this.currentWallpaperURL);
+            this.sendSocketNotification("EXTRACT_COLOR", {
+                imagePath: this.currentWallpaperURL,
+                config: this.config,
+                retryAttempt: this.retryCount
+            });
+        }
+    },
+    
+    // Use fallback color when extraction fails
+    useFallbackColor: function() {
+        const fallbackIndex = Math.floor(Math.random() * this.config.fallbackColors.length);
+        const fallbackColor = this.config.fallbackColors[fallbackIndex];
+        
+        this.debug("Using fallback color:", fallbackColor);
+        this.updateCssVariables(fallbackColor, "fallback");
     },
     
     // Process weather data to set appropriate colors
@@ -401,7 +611,7 @@ Module.register("MMM-WallpaperColorExtractor", {
             this.debug("Using weather color for", weatherKey + ":", weatherColor);
             this.currentColor = weatherColor;
             this.currentColorSource = "weather";
-            this.updateCssVariable(weatherColor, "weather-" + weatherKey);
+            this.updateCssVariables(weatherColor, "weather-" + weatherKey);
         }
     },
     
@@ -415,7 +625,7 @@ Module.register("MMM-WallpaperColorExtractor", {
             this.debug("Using holiday color:", holidayColor);
             this.currentColor = holidayColor;
             this.currentColorSource = "holiday";
-            this.updateCssVariable(this.currentColor, "holiday");
+            this.updateCssVariables(this.currentColor, "holiday");
             return true;
         }
         
@@ -477,31 +687,58 @@ Module.register("MMM-WallpaperColorExtractor", {
         return null;
     },
     
-    // Update CSS variable with new color
-    updateCssVariable: function(color, source) {
-        if (!color) {
-            this.debug("No color provided to updateCssVariable");
-            return;
+    // Enhanced CSS variable update with multiple variables support
+    updateCssVariables: function(color, source) {
+        try {
+            this.debug(`Updating CSS variables with color: ${color} from source: ${source}`);
+            
+            if (this.config.enableMultipleVariables && this.config.cssVariables) {
+                // Update multiple CSS variables
+                Object.entries(this.config.cssVariables).forEach(([key, variable]) => {
+                    this.updateSingleCssVariable(variable, color, source);
+                });
+            } else {
+                // Update single CSS variable
+                this.updateSingleCssVariable(this.config.targetVariable, color, source);
+            }
+            
+            this.currentColor = color;
+            this.currentColorSource = source;
+            
+            // Notify other modules of color change
+            this.sendNotification("COLOR_THEME_CHANGED", {
+                color: color,
+                source: source,
+                variable: this.config.targetVariable,
+                timestamp: Date.now()
+            });
+            
+        } catch (error) {
+            this.logError(error, "CSS_UPDATE");
         }
-        
-        // Set default source if not provided
-        source = source || "unknown";
-        
-        this.debug("Updating CSS variable", this.config.targetVariable, "to", color, "from source:", source);
-        
-        // Apply the color
-        document.documentElement.style.setProperty(this.config.targetVariable, color);
-        
-        // Add a visible console log to show the selected color and source
-        console.log("%c Selected Color: " + color + " (" + source + ") ", 
-            "background-color: " + color + "; color: " + this.getContrastColor(color) + "; font-size: 14px; padding: 4px 8px; border-radius: 4px;");
-        
-        // Broadcast the color change to other modules
-        this.sendNotification("COLOR_THEME_CHANGED", { 
-            variable: this.config.targetVariable,
-            color: color,
-            source: source
-        });
+    },
+    
+    // Update a single CSS variable with animation
+    updateSingleCssVariable: function(variable, color, source) {
+        try {
+            const root = document.documentElement;
+            const currentValue = getComputedStyle(root).getPropertyValue(variable).trim();
+            
+            if (currentValue !== color) {
+                this.debug(`Updating ${variable}: ${currentValue} -> ${color}`);
+                
+                // Apply transition animation
+                root.style.transition = `all ${this.config.animationSpeed}ms ease-in-out`;
+                root.style.setProperty(variable, color);
+                
+                // Remove transition after animation completes
+                setTimeout(() => {
+                    root.style.transition = "";
+                }, this.config.animationSpeed);
+            }
+        } catch (error) {
+            this.logError(error, "SINGLE_CSS_UPDATE");
+        }
     },
     
     // Determine contrasting text color for the log
@@ -531,11 +768,120 @@ Module.register("MMM-WallpaperColorExtractor", {
         return luminance > 0.5 ? "#000000" : "#FFFFFF";
     },
     
-    // Clean up on stop
+    // Generate color palette from base color
+    generateColorPalette: function(baseColor) {
+        try {
+            const color = Color(baseColor);
+            const palette = {
+                primary: baseColor,
+                secondary: color.rotate(180).hex(),
+                accent: color.rotate(120).hex(),
+                complementary: color.rotate(180).hex(),
+                analogous1: color.rotate(-30).hex(),
+                analogous2: color.rotate(30).hex(),
+                triadic1: color.rotate(120).hex(),
+                triadic2: color.rotate(240).hex(),
+                lighter: color.lighten(0.2).hex(),
+                darker: color.darken(0.2).hex(),
+                muted: color.desaturate(0.3).hex()
+            };
+            
+            this.debug("Generated color palette:", palette);
+            return palette;
+        } catch (error) {
+            this.logError(error, "PALETTE_GENERATION");
+            return { primary: baseColor };
+        }
+    },
+    
+    // Validate color format
+    validateColor: function(color) {
+        if (!color) return false;
+        
+        // Check if it's a valid hex color
+        const hexRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
+        if (hexRegex.test(color)) return true;
+        
+        // Check if it's a valid CSS color name
+        const tempElement = document.createElement('div');
+        tempElement.style.color = color;
+        return tempElement.style.color !== '';
+    },
+    
+    // Get module status for debugging
+    getModuleStatus: function() {
+        return {
+            currentColor: this.currentColor,
+            currentColorSource: this.currentColorSource,
+            retryCount: this.retryCount,
+            isProcessing: this.isProcessing,
+            lastObservedSrc: this.lastObservedSrc,
+            config: {
+                preset: this.config.preset,
+                debugMode: this.config.debugMode,
+                enableMultipleVariables: this.config.enableMultipleVariables
+            }
+        };
+    },
+    
+    // Performance monitoring
+    startPerformanceTimer: function(operation) {
+        this.performanceTimers = this.performanceTimers || {};
+        this.performanceTimers[operation] = Date.now();
+    },
+    
+    endPerformanceTimer: function(operation) {
+        if (this.performanceTimers && this.performanceTimers[operation]) {
+            const duration = Date.now() - this.performanceTimers[operation];
+            this.debug(`Performance: ${operation} took ${duration}ms`);
+            
+            // Send performance metrics to node helper
+            this.sendSocketNotification("PERFORMANCE_METRIC", {
+                operation: operation,
+                duration: duration,
+                timestamp: Date.now()
+            });
+            
+            delete this.performanceTimers[operation];
+            return duration;
+        }
+        return 0;
+    },
+    
+    // Enhanced cleanup on stop
     stop: function() {
-        if (this.observeTimer) {
-            clearInterval(this.observeTimer);
-            this.observeTimer = null;
+        this.debug("Stopping module");
+        
+        try {
+            // Clear timers
+            if (this.observeTimer) {
+                clearInterval(this.observeTimer);
+                this.observeTimer = null;
+            }
+            
+            // Clear performance timers
+            if (this.performanceTimers) {
+                Object.keys(this.performanceTimers).forEach(timer => {
+                    delete this.performanceTimers[timer];
+                });
+            }
+            
+            // Reset state
+            this.currentColor = null;
+            this.currentColorSource = null;
+            this.currentWallpaperURL = null;
+            this.lastObservedSrc = null;
+            this.retryCount = 0;
+            this.isProcessing = false;
+            
+            // Notify node helper of shutdown
+            this.sendSocketNotification("MODULE_SHUTDOWN", {
+                timestamp: Date.now()
+            });
+            
+            this.debug("Module stopped successfully");
+        } catch (error) {
+            this.logError(error, "SHUTDOWN");
         }
     },
     
@@ -545,4 +891,24 @@ Module.register("MMM-WallpaperColorExtractor", {
         wrapper.style.display = "none"; // This module doesn't need visual elements
         return wrapper;
     },
+    
+    // Get script dependencies
+    getScripts: function() {
+        return [];
+    },
+    
+    // Get stylesheet dependencies
+    getStyles: function() {
+        return [];
+    },
+    
+    // Get translation files
+    getTranslations: function() {
+        return {
+            en: "translations/en.json",
+            es: "translations/es.json",
+            fr: "translations/fr.json",
+            de: "translations/de.json"
+        };
+    }
 });
