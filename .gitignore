@@ -9,6 +9,12 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Testing and coverage
+coverage/
+.nyc_output/
+*.lcov
+.jest/
+
 # Editor directories and files
 .idea/
 .vscode/
@@ -31,4 +37,21 @@ Thumbs.db
 .env.*.local
 
 # Debug files
-debug.log 
+debug.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Build artifacts
+dist/
+build/
+
+# MagicMirror specific
+config.js
+config/config.js
+
+# Development files
+dev-test.js
+test-output/ 
