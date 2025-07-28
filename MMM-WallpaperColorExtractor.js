@@ -36,6 +36,7 @@ Module.register("MMM-WallpaperColorExtractor", {
         wallpaperDir: "", // Path to your wallpaper directory (leave empty for auto-detection)
         samplingRatio: 0.1, // Sample 10% of the pixels for large images
         debugMode: false, // Set to false to reduce console output
+        debugDisplay: false, // Set to true to show color info on screen
         observeInterval: 2000, // How often to check the DOM for new wallpaper (in ms)
         priorityOrder: ["holiday", "wallpaper", "weather", "time"],
         
@@ -478,6 +479,18 @@ Module.register("MMM-WallpaperColorExtractor", {
                     }
                 }
                 
+                // Handle multiple colors if available
+                if (payload.palette && this.config.enableMultipleVariables) {
+                    this.multipleColors = {};
+                    Object.keys(payload.palette).forEach(key => {
+                        const color = payload.palette[key];
+                        if (color && color.getHex) {
+                            this.multipleColors[key] = color.getHex();
+                        }
+                    });
+                    this.debug("Multiple colors extracted:", this.multipleColors);
+                }
+                
                 // Only apply wallpaper color if it's higher priority than current color source
                 const currentPriority = this.config.priorityOrder.indexOf(this.currentColorSource);
                 const wallpaperPriority = this.config.priorityOrder.indexOf("wallpaper");
@@ -538,6 +551,9 @@ Module.register("MMM-WallpaperColorExtractor", {
     handlePerformanceMetrics: function(payload) {
         this.debug("Performance metrics:", payload);
         
+        // Store performance metrics for debug display
+        this.lastPerformanceMetrics = payload;
+        
         // Log performance issues
         if (payload.extractionTime > 5000) {
             this.debug("Slow color extraction detected:", payload.extractionTime + "ms");
@@ -545,6 +561,11 @@ Module.register("MMM-WallpaperColorExtractor", {
         
         if (payload.cacheHitRate < 0.5) {
             this.debug("Low cache hit rate:", payload.cacheHitRate);
+        }
+        
+        // Update debug display if enabled
+        if (this.config.debugDisplay) {
+            this.updateDom();
         }
     },
     
@@ -704,6 +725,11 @@ Module.register("MMM-WallpaperColorExtractor", {
             
             this.currentColor = color;
             this.currentColorSource = source;
+            
+            // Update debug display if enabled
+            if (this.config.debugDisplay) {
+                this.updateDom();
+            }
             
             // Notify other modules of color change
             this.sendNotification("COLOR_THEME_CHANGED", {
@@ -888,8 +914,81 @@ Module.register("MMM-WallpaperColorExtractor", {
     // Override DOM generator
     getDom: function() {
         const wrapper = document.createElement("div");
-        wrapper.style.display = "none"; // This module doesn't need visual elements
+        
+        // If debug display is enabled, show color information
+        if (this.config.debugDisplay) {
+            wrapper.className = "wallpaper-color-debug";
+            wrapper.style.display = "block";
+            
+            const debugInfo = this.getDebugInfo();
+            wrapper.innerHTML = debugInfo;
+        } else {
+            wrapper.style.display = "none"; // This module doesn't need visual elements
+        }
+        
         return wrapper;
+    },
+    
+    // Get debug information for display
+    getDebugInfo: function() {
+        if (!this.config.debugDisplay) return "";
+        
+        const info = [];
+        info.push(`<strong>Wallpaper Color Extractor Debug</strong><br>`);
+        info.push(`<hr>`);
+        
+        // Current color info
+        if (this.currentColor) {
+            info.push(`<div>`);
+            info.push(`<span style="color: ${this.currentColor};">●</span> Current Color: ${this.currentColor}<br>`);
+            info.push(`Source: ${this.currentColorSource || 'Unknown'}<br>`);
+            info.push(`</div>`);
+        } else {
+            info.push(`<div class="status-error">● No color extracted</div>`);
+        }
+        
+        // Wallpaper info
+        if (this.currentWallpaperURL) {
+            info.push(`<div>`);
+            info.push(`Wallpaper: ${this.currentWallpaperURL.substring(0, 30)}...<br>`);
+            info.push(`</div>`);
+        }
+        
+        // Status info
+        info.push(`<div>`);
+        const statusClass = this.isProcessing ? 'status-processing' : 'status-idle';
+        info.push(`Status: <span class="${statusClass}">${this.isProcessing ? 'Processing' : 'Idle'}</span><br>`);
+        info.push(`Retries: ${this.retryCount || 0}<br>`);
+        info.push(`Preset: ${this.config.preset}<br>`);
+        info.push(`</div>`);
+        
+        // Multiple variables info
+        if (this.config.enableMultipleVariables && this.multipleColors) {
+            info.push(`<div class="multiple-colors">`);
+            info.push(`<strong>Multiple Colors:</strong><br>`);
+            Object.keys(this.multipleColors).forEach(key => {
+                const color = this.multipleColors[key];
+                info.push(`<div class="color-item">`);
+                info.push(`<span style="color: ${color};">●</span>`);
+                info.push(`<span class="color-name">${key}:</span>`);
+                info.push(`<span class="color-value">${color}</span>`);
+                info.push(`</div>`);
+            });
+            info.push(`</div>`);
+        }
+        
+        // Performance info
+        if (this.lastPerformanceMetrics) {
+            info.push(`<div>`);
+            info.push(`<strong>Performance:</strong><br>`);
+            const duration = this.lastPerformanceMetrics.duration || 0;
+            const durationClass = duration < 1000 ? 'performance-good' : duration < 3000 ? 'performance-warning' : 'performance-poor';
+            info.push(`Last extraction: <span class="${durationClass}">${duration}ms</span><br>`);
+            info.push(`Cache hits: ${this.lastPerformanceMetrics.cacheHits || 0}<br>`);
+            info.push(`</div>`);
+        }
+        
+        return info.join('');
     },
     
     // Get script dependencies
@@ -899,7 +998,7 @@ Module.register("MMM-WallpaperColorExtractor", {
     
     // Get stylesheet dependencies
     getStyles: function() {
-        return [];
+        return ["MMM-WallpaperColorExtractor.css"];
     },
     
     // Get translation files

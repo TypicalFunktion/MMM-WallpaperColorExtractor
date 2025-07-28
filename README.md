@@ -244,6 +244,34 @@ Enable debug mode for detailed logging:
 }
 ```
 
+### Debug Display
+
+Enable debug display to show color information on screen:
+
+```javascript
+{
+    module: "MMM-WallpaperColorExtractor",
+    config: {
+        debugDisplay: true,  // Shows color info on screen
+        debugMode: true      // Also enables console logging
+    }
+}
+```
+
+The debug display shows:
+- Current extracted color with visual indicator
+- Color source (wallpaper, holiday, weather, etc.)
+- Processing status and retry count
+- Performance metrics
+- Multiple colors (if enabled)
+- Wallpaper file information
+
+This is useful for:
+- Verifying color extraction is working
+- Debugging color selection issues
+- Monitoring performance
+- Testing different configuration options
+
 ## 🔗 Compatibility
 
 - **MagicMirror²**: `>= 2.0.0`
