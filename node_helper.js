@@ -13,7 +13,7 @@ const { exec } = require("child_process");
 // Try to load node-vibrant with fallback
 let Vibrant;
 try {
-    Vibrant = require('node-vibrant/lib/vibrant');
+    Vibrant = require('node-vibrant/node');
     console.log("MMM-WallpaperColorExtractor: node-vibrant loaded successfully");
 } catch (error) {
     console.log("MMM-WallpaperColorExtractor: node-vibrant failed to load, using fallback color extraction");

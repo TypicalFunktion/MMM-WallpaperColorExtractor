@@ -15,20 +15,20 @@ try {
     console.log('✗ Old import method failed:', error.message);
 }
 
-// Test 2: Try the new import method
-console.log('\nTest 2: New import method');
+// Test 2: Try the correct import method
+console.log('\nTest 2: Correct import method (node-vibrant/node)');
 try {
-    const Vibrant2 = require('node-vibrant/lib/vibrant');
-    console.log('✓ New import method works');
+    const Vibrant2 = require('node-vibrant/node');
+    console.log('✓ Correct import method works');
 } catch (error) {
-    console.log('✗ New import method failed:', error.message);
+    console.log('✗ Correct import method failed:', error.message);
 }
 
 // Test 3: Try with fallback
 console.log('\nTest 3: Fallback method');
 let Vibrant3;
 try {
-    Vibrant3 = require('node-vibrant/lib/vibrant');
+    Vibrant3 = require('node-vibrant/node');
     console.log('✓ node-vibrant loaded successfully');
 } catch (error) {
     console.log('✗ node-vibrant failed to load, using fallback');
