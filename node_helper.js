@@ -9,7 +9,17 @@ const NodeHelper = require("node_helper");
 const path = require("path");
 const fs = require("fs");
 const { exec } = require("child_process");
-const Vibrant = require('node-vibrant');
+
+// Try to load node-vibrant with fallback
+let Vibrant;
+try {
+    Vibrant = require('node-vibrant/lib/vibrant');
+    console.log("MMM-WallpaperColorExtractor: node-vibrant loaded successfully");
+} catch (error) {
+    console.log("MMM-WallpaperColorExtractor: node-vibrant failed to load, using fallback color extraction");
+    Vibrant = null;
+}
+
 const http = require('http');
 const https = require('https');
 const url = require('url');
@@ -496,6 +506,21 @@ module.exports = NodeHelper.create({
     extractVibrantColor: function(imagePath, config) {
         return new Promise((resolve, reject) => {
             try {
+                if (!Vibrant) {
+                    console.log("MMM-WallpaperColorExtractor: node-vibrant not available, using fallback color.");
+                    const fallbackIndex = Math.floor(Math.random() * (config.fallbackColors || []).length);
+                    const fallbackColor = (config.fallbackColors || [])[fallbackIndex];
+                    resolve({
+                        success: true,
+                        color: fallbackColor,
+                        source: "fallback",
+                        fileInfo: path.basename(imagePath),
+                        method: "fallback",
+                        palette: {}
+                    });
+                    return;
+                }
+
                 const vibrant = new Vibrant(imagePath, {
                     quality: 1,
                     colorCount: 64,
