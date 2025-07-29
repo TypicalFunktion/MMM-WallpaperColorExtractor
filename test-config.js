@@ -1,39 +1,41 @@
-// Test configuration for MMM-WallpaperColorExtractor
-// This will force the debug display to show even without a wallpaper
+// Safe test configuration for MMM-WallpaperColorExtractor
+// This configuration is designed to prevent black screen issues
 
 module.exports = {
     module: "MMM-WallpaperColorExtractor",
     config: {
-        // Force debug display to show
-        debugDisplay: true,
-        debugMode: true,
+        // Disable debug display to prevent any visual interference
+        debugDisplay: false,
+        debugMode: false,
         
-        // Basic settings
-        preset: "vibrant",
-        updateInterval: 5000,  // Check every 5 seconds
-        defaultColor: "#FF0000", // Red for testing
+        // Use safe defaults
+        preset: "default",
+        updateInterval: 30000,  // 30 seconds - less frequent updates
+        defaultColor: "#90d5ff", // Safe default color
         
         // Target CSS variable
         targetVariable: "--color-text-highlight",
         
-        // Force some test data
-        enableMultipleVariables: true,
-        cssVariables: {
-            primary: "--color-text-highlight",
-            secondary: "--color-text-highlight-secondary",
-            accent: "--color-accent",
-            border: "--color-border"
+        // Disable multiple variables for now
+        enableMultipleVariables: false,
+        
+        // Conservative performance settings
+        samplingRatio: 0.05,    // 5% sampling
+        maxRetries: 2,          // Fewer retries
+        retryDelay: 2000,       // Longer delay
+        timeout: 15000,         // Longer timeout
+        observeInterval: 10000,  // Less frequent DOM checking
+        
+        // Disable features that might cause issues
+        enableWeatherColors: false,
+        enableTimeColors: false,
+        
+        // Minimal holiday colors for testing
+        holidayColors: {
+            "12-25": "#FF0000" // Christmas red only
         },
         
-        // Performance settings
-        samplingRatio: 0.1,
-        maxRetries: 3,
-        retryDelay: 1000,
-        timeout: 10000,
-        
-        // Test holiday color
-        holidayColors: {
-            "12-25": "#00FF00" // Christmas green
-        }
+        // Safe fallback colors
+        fallbackColors: ["#90d5ff", "#FF9AA2"]
     }
 }; 

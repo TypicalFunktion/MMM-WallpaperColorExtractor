@@ -1,66 +1,52 @@
 # MMM-WallpaperColorExtractor Troubleshooting Guide
 
-## Blank Page Issues
+## Black Screen Issues
 
-### 1. Check if the module is loaded
-- Look for a small "WCE Loaded" indicator in the top-left corner
-- If you don't see this, the module isn't loading properly
+If MagicMirror shows a black/blank screen after adding this module, follow these steps:
 
-### 2. Enable debug display
-Add this to your config.js:
+### 1. Immediate Fix
+Remove the module from your `config.js` and restart MagicMirror to confirm the module is the cause.
+
+### 2. Safe Configuration
+Use this minimal configuration to test:
+
 ```javascript
 {
     module: "MMM-WallpaperColorExtractor",
     config: {
-        debugDisplay: true,
-        debugMode: true
+        debugDisplay: false,
+        debugMode: false,
+        preset: "default",
+        updateInterval: 30000,
+        defaultColor: "#90d5ff",
+        targetVariable: "--color-text-highlight",
+        enableMultipleVariables: false,
+        enableWeatherColors: false,
+        enableTimeColors: false
     }
 }
 ```
 
-### 3. Check browser console
-- Open browser developer tools (F12)
-- Look for any JavaScript errors
-- Check for "WCE" or "WallpaperColorExtractor" log messages
+### 3. Check Dependencies
+Ensure all dependencies are installed:
 
-### 4. Verify module installation
 ```bash
 cd ~/MagicMirror/modules/MMM-WallpaperColorExtractor
 npm install
 ```
 
-### 5. Check MagicMirror logs
+### 4. Check Node.js Version
+This module requires Node.js >= 14:
+
 ```bash
-pm2 logs MagicMirror
-# or if not using PM2
-npm start
+node --version
 ```
 
-## Common Issues
+### 5. Check Console Logs
+Look for errors in the MagicMirror console or browser developer tools.
 
-### Module not showing debug display
-- Ensure `debugDisplay: true` is set in config
-- Check that the module is properly added to your config.js
-- Verify the CSS file is loading
-
-### No colors being extracted
-- Check if you have a wallpaper module installed (MMM-Wallpaper, MMM-Background)
-- Verify the wallpaper module is working
-- Enable `debugMode: true` for detailed logging
-
-### Performance issues
-- Reduce `updateInterval` value
-- Lower `samplingRatio` for large images
-- Use the "performance" preset
-
-### CSS variables not updating
-- Verify the CSS variable names are correct
-- Check that your custom CSS is using the variables
-- Ensure the module has proper permissions
-
-## Test Configuration
-
-Use this minimal configuration to test:
+### 6. Test with Debug Mode
+If the safe configuration works, try enabling debug mode:
 
 ```javascript
 {
@@ -68,26 +54,58 @@ Use this minimal configuration to test:
     config: {
         debugDisplay: true,
         debugMode: true,
-        preset: "vibrant",
-        defaultColor: "#FF0000"
+        preset: "default",
+        updateInterval: 30000,
+        defaultColor: "#90d5ff"
     }
 }
 ```
 
-## Debug Information
+### 7. Common Issues
 
-When `debugDisplay: true` is enabled, you should see:
-- Current extracted color with visual indicator
-- Color source (wallpaper, holiday, weather, etc.)
-- Processing status and retry count
-- Performance metrics
-- Multiple colors (if enabled)
-- Wallpaper file information
+#### Missing Dependencies
+- Ensure `node-vibrant` is installed
+- Check if `sharp` is available (optional but recommended)
 
-## Getting Help
+#### Configuration Errors
+- Invalid color values in `holidayColors`
+- Invalid CSS variable names
+- Invalid preset names
 
-1. Check the browser console for errors
-2. Enable debug mode and check logs
-3. Verify your configuration syntax
-4. Test with the minimal configuration above
-5. Check if other modules are interfering 
+#### Memory Issues
+- Reduce `maxCacheSize` if experiencing memory problems
+- Increase `updateInterval` to reduce processing frequency
+
+### 8. Recovery Steps
+
+1. **Remove module from config.js**
+2. **Restart MagicMirror**
+3. **Check console for errors**
+4. **Reinstall dependencies if needed**
+5. **Add module back with safe configuration**
+6. **Gradually enable features**
+
+### 9. Emergency Recovery
+
+If MagicMirror won't start at all:
+
+1. Stop MagicMirror
+2. Edit `config.js` and comment out the MMM-WallpaperColorExtractor entry
+3. Restart MagicMirror
+4. Check logs for specific error messages
+
+### 10. Getting Help
+
+If issues persist:
+1. Check the browser console for JavaScript errors
+2. Check the terminal for Node.js errors
+3. Enable debug mode and check the debug display
+4. Report issues with specific error messages
+
+## Version History
+
+### v2.0.1 (Current)
+- Fixed black screen issues
+- Added comprehensive error handling
+- Improved debug display safety
+- Enhanced startup error recovery 

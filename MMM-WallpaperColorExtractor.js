@@ -249,13 +249,18 @@ Module.register("MMM-WallpaperColorExtractor", {
         try {
             // Apply preset if specified
             if (this.config.preset && this.config.preset !== "default") {
-                this.applyPreset(this.config.preset);
+                try {
+                    this.applyPreset(this.config.preset);
+                } catch (presetError) {
+                    this.logError(presetError, "PRESET_APPLICATION");
+                    // Continue with default config if preset fails
+                }
             }
             
             // Validate configuration
             if (!this.validateConfig()) {
                 this.logError("Module failed to start due to configuration errors", "STARTUP");
-                return;
+                // Don't return, continue with minimal functionality
             }
             
             this.debug("Module configuration:", JSON.stringify(this.config));
@@ -265,20 +270,32 @@ Module.register("MMM-WallpaperColorExtractor", {
             this.retryCount = 0;
             this.isProcessing = false;
             
-            // Set the initial CSS variable
-            this.updateCssVariables(this.currentColor, "default");
+            // Set the initial CSS variable with error handling
+            try {
+                this.updateCssVariables(this.currentColor, "default");
+            } catch (cssError) {
+                this.logError(cssError, "CSS_UPDATE");
+            }
             
             // Subscribe to notifications
             this.debug("Subscribing to notifications");
             
-            // Subscribe to wallpaper change notifications
-            this.debug("Sending SUBSCRIBE_WALLPAPER_CHANGES notification");
-            this.sendSocketNotification("SUBSCRIBE_WALLPAPER_CHANGES", {
-                config: this.config
-            });
+            // Subscribe to wallpaper change notifications with error handling
+            try {
+                this.debug("Sending SUBSCRIBE_WALLPAPER_CHANGES notification");
+                this.sendSocketNotification("SUBSCRIBE_WALLPAPER_CHANGES", {
+                    config: this.config
+                });
+            } catch (socketError) {
+                this.logError(socketError, "SOCKET_NOTIFICATION");
+            }
             
-            // Check holiday color at startup (highest priority)
-            this.checkHolidayColor();
+            // Check holiday color at startup (highest priority) with error handling
+            try {
+                this.checkHolidayColor();
+            } catch (holidayError) {
+                this.logError(holidayError, "HOLIDAY_CHECK");
+            }
             
             // Start DOM observation manually to avoid relying on MMM-Wallpaper notifications
             this.loaded = true;
@@ -286,30 +303,45 @@ Module.register("MMM-WallpaperColorExtractor", {
             this.debug("Module started successfully");
         } catch (error) {
             this.logError(error, "STARTUP");
+            // Ensure module doesn't crash completely
+            this.loaded = true;
+            this.currentColor = this.config.defaultColor;
         }
     },
     
     // After DOM is ready, set up observation of wallpaper changes
     notificationReceived: function(notification, payload, sender) {
-        if (notification === "MODULE_DOM_CREATED") {
-            // Wait a bit for all modules to be fully initialized
-            setTimeout(() => {
-                this.observeWallpaperDOM();
-                this.checkForExistingWallpaper();
-            }, 5000);
-        }
-        
-        // Listen for weather notifications
-        if (notification === "CURRENT_WEATHER" && this.config.enableWeatherColors) {
-            this.debug("Received current weather data:", payload);
-            
-            // Only apply weather color if it's higher priority than current color source
-            const currentPriority = this.config.priorityOrder.indexOf(this.currentColorSource);
-            const weatherPriority = this.config.priorityOrder.indexOf("weather");
-            
-            if (weatherPriority < currentPriority || currentPriority === -1) {
-                this.processWeatherData(payload);
+        try {
+            if (notification === "MODULE_DOM_CREATED") {
+                // Wait a bit for all modules to be fully initialized
+                setTimeout(() => {
+                    try {
+                        this.observeWallpaperDOM();
+                        this.checkForExistingWallpaper();
+                    } catch (domError) {
+                        this.logError(domError, "DOM_OBSERVATION");
+                    }
+                }, 5000);
             }
+            
+            // Listen for weather notifications
+            if (notification === "CURRENT_WEATHER" && this.config.enableWeatherColors) {
+                this.debug("Received current weather data:", payload);
+                
+                try {
+                    // Only apply weather color if it's higher priority than current color source
+                    const currentPriority = this.config.priorityOrder.indexOf(this.currentColorSource);
+                    const weatherPriority = this.config.priorityOrder.indexOf("weather");
+                    
+                    if (weatherPriority < currentPriority || currentPriority === -1) {
+                        this.processWeatherData(payload);
+                    }
+                } catch (weatherError) {
+                    this.logError(weatherError, "WEATHER_PROCESSING");
+                }
+            }
+        } catch (error) {
+            this.logError(error, "NOTIFICATION_RECEIVED");
         }
     },
     
@@ -923,24 +955,27 @@ Module.register("MMM-WallpaperColorExtractor", {
             wrapper.className = "wallpaper-color-debug";
             wrapper.style.display = "block";
             
-            const debugInfo = this.getDebugInfo();
-            wrapper.innerHTML = debugInfo;
-            
-            this.debug("Debug display enabled, showing:", debugInfo);
+            try {
+                const debugInfo = this.getDebugInfo();
+                wrapper.innerHTML = debugInfo;
+                this.debug("Debug display enabled, showing:", debugInfo);
+            } catch (error) {
+                this.logError(error, "DEBUG_DISPLAY");
+                wrapper.innerHTML = "Debug display error";
+            }
         } else {
-            // For testing purposes, show a minimal indicator that the module is loaded
-            wrapper.style.display = "block";
-            wrapper.style.position = "fixed";
-            wrapper.style.top = "5px";
-            wrapper.style.left = "5px";
-            wrapper.style.background = "rgba(0, 0, 0, 0.7)";
-            wrapper.style.color = "white";
-            wrapper.style.padding = "5px";
-            wrapper.style.borderRadius = "3px";
-            wrapper.style.fontSize = "10px";
-            wrapper.style.zIndex = "9999";
-            wrapper.innerHTML = "WCE Loaded";
-            this.debug("Debug display disabled, showing minimal indicator");
+            // When debug display is disabled, make the element completely hidden
+            wrapper.style.display = "none";
+            wrapper.style.position = "absolute";
+            wrapper.style.left = "-9999px";
+            wrapper.style.top = "-9999px";
+            wrapper.style.width = "1px";
+            wrapper.style.height = "1px";
+            wrapper.style.overflow = "hidden";
+            wrapper.style.opacity = "0";
+            wrapper.style.pointerEvents = "none";
+            wrapper.innerHTML = "";
+            this.debug("Debug display disabled, element hidden");
         }
         
         return wrapper;

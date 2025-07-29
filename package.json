@@ -1,6 +1,6 @@
 {
   "name": "MMM-WallpaperColorExtractor",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Magic Mirror module to extract vibrant colors from wallpaper for theming with enhanced performance, error handling, and multiple CSS variable support",
   "main": "MMM-WallpaperColorExtractor.js",
   "scripts": {
