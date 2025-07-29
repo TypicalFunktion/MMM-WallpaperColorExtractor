@@ -915,6 +915,9 @@ Module.register("MMM-WallpaperColorExtractor", {
     getDom: function() {
         const wrapper = document.createElement("div");
         
+        // Always log for debugging
+        this.debug("getDom called, debugDisplay:", this.config.debugDisplay);
+        
         // If debug display is enabled, show color information
         if (this.config.debugDisplay) {
             wrapper.className = "wallpaper-color-debug";
@@ -922,8 +925,22 @@ Module.register("MMM-WallpaperColorExtractor", {
             
             const debugInfo = this.getDebugInfo();
             wrapper.innerHTML = debugInfo;
+            
+            this.debug("Debug display enabled, showing:", debugInfo);
         } else {
-            wrapper.style.display = "none"; // This module doesn't need visual elements
+            // For testing purposes, show a minimal indicator that the module is loaded
+            wrapper.style.display = "block";
+            wrapper.style.position = "fixed";
+            wrapper.style.top = "5px";
+            wrapper.style.left = "5px";
+            wrapper.style.background = "rgba(0, 0, 0, 0.7)";
+            wrapper.style.color = "white";
+            wrapper.style.padding = "5px";
+            wrapper.style.borderRadius = "3px";
+            wrapper.style.fontSize = "10px";
+            wrapper.style.zIndex = "9999";
+            wrapper.innerHTML = "WCE Loaded";
+            this.debug("Debug display disabled, showing minimal indicator");
         }
         
         return wrapper;
