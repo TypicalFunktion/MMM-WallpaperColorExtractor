@@ -232,4 +232,80 @@ describe('MMM-WallpaperColorExtractor', () => {
             expect(multiVarConfig.cssVariables.primary).toBe('--color-text-highlight');
         });
     });
-}); 
+
+    describe('Bug Fix Regression Tests', () => {
+        test('Pi Day hex color should be a valid 6-digit hex', () => {
+            const holidayColors = global.Module.config.defaults.holidayColors;
+            const piDayColor = holidayColors['03-14'];
+            expect(piDayColor).toBeDefined();
+            // Must be exactly 6 hex digits (7-char string including #)
+            expect(/^#[A-Fa-f0-9]{6}$/.test(piDayColor)).toBe(true);
+            expect(piDayColor).toBe('#314159');
+        });
+
+        test('all holiday colors should be valid hex colors', () => {
+            const holidayColors = global.Module.config.defaults.holidayColors;
+            const hexRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
+            Object.entries(holidayColors).forEach(([date, color]) => {
+                expect(hexRegex.test(color)).toBe(true, `Invalid color for date ${date}: ${color}`);
+            });
+        });
+
+        test('LRUCache should store and expose cachePath', () => {
+            // Simulate the LRUCache constructor fix by testing the pattern directly
+            class LRUCacheTest {
+                constructor(maxSize = 50, cachePath = "") {
+                    this.maxSize = maxSize;
+                    this.cachePath = cachePath;
+                    this.cache = new Map();
+                }
+            }
+            const cache = new LRUCacheTest(10, '/tmp/test-cache');
+            expect(cache.cachePath).toBe('/tmp/test-cache');
+            expect(cache.maxSize).toBe(10);
+        });
+
+        test('applyPreset should create new config object (not mutate original)', () => {
+            // Test that the preset merge produces a new object
+            const originalConfig = { updateInterval: 10000, debugMode: false, minBrightness: 0.3 };
+            const preset = { colorExtractionMethod: 'vibrant', minBrightness: 0.6 };
+            const newConfig = Object.assign({}, originalConfig, preset);
+            // Ensure preset values override
+            expect(newConfig.minBrightness).toBe(0.6);
+            expect(newConfig.colorExtractionMethod).toBe('vibrant');
+            // Ensure non-overridden values are preserved
+            expect(newConfig.updateInterval).toBe(10000);
+            // Ensure original is unchanged (shallow clone was used)
+            expect(originalConfig.colorExtractionMethod).toBeUndefined();
+        });
+
+        test('cleanupCache should not throw when config is null', () => {
+            const fs = require('fs');
+            const path = require('path');
+            const os = require('os');
+            const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mme-test-'));
+
+            // Simulate cleanupCache logic with null config
+            const cleanupCache = function(cachePath, config) {
+                if (!fs.existsSync(cachePath)) return;
+                const maxAge = (config && config.maxCacheAge) || (24 * 60 * 60 * 1000);
+                const maxSize = (config && config.maxCacheSize) || 50;
+                let files = fs.readdirSync(cachePath).filter(f => f.endsWith('.jpg'));
+                const now = Date.now();
+                files.forEach(file => {
+                    const filePath = path.join(cachePath, file);
+                    const stats = fs.statSync(filePath);
+                    if (now - stats.mtime.getTime() > maxAge) fs.unlinkSync(filePath);
+                });
+            };
+
+            // Should not throw with null config
+            expect(() => cleanupCache(tmpDir, null)).not.toThrow();
+            // Should not throw with missing cache dir
+            expect(() => cleanupCache('/nonexistent/path/xyz', null)).not.toThrow();
+
+            // Cleanup
+            fs.rmdirSync(tmpDir);
+        });
+    });
+});

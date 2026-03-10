@@ -16,7 +16,7 @@ try {
     Vibrant = require('node-vibrant/node');
     console.log("MMM-WallpaperColorExtractor: node-vibrant loaded successfully");
 } catch (error) {
-    console.log("MMM-WallpaperColorExtractor: node-vibrant failed to load, using fallback color extraction");
+    console.warn("MMM-WallpaperColorExtractor: node-vibrant failed to load, using fallback color extraction");
     Vibrant = null;
 }
 
@@ -30,8 +30,9 @@ const _ = require('lodash');
 
 // LRU Cache implementation for better memory management
 class LRUCache {
-    constructor(maxSize = 50) {
+    constructor(maxSize = 50, cachePath = "") {
         this.maxSize = maxSize;
+        this.cachePath = cachePath;
         this.cache = new Map();
         this.accessOrder = [];
     }
@@ -86,10 +87,10 @@ class LRUCache {
                 fs.unlinkSync(cachedImagePath);
             }
         } catch (error) {
-            console.log(`MMM-WallpaperColorExtractor: Error removing cached file: ${error.message}`);
+            console.error(`MMM-WallpaperColorExtractor: Error removing cached file: ${error.message}`);
         }
     }
-    
+
     clear() {
         this.cache.clear();
         this.accessOrder = [];
@@ -102,7 +103,7 @@ class LRUCache {
                 }
             });
         } catch (error) {
-            console.log(`MMM-WallpaperColorExtractor: Error clearing cache: ${error.message}`);
+            console.error(`MMM-WallpaperColorExtractor: Error clearing cache: ${error.message}`);
         }
     }
     
@@ -121,10 +122,17 @@ class LRUCache {
 }
 
 module.exports = NodeHelper.create({
+    // Debug logging helper - only logs when debugMode is enabled
+    debugLog: function(message) {
+        if (this.config && this.config.debugMode) {
+            console.log(message);
+        }
+    },
+
     // Initialize the helper with enhanced features
     start: function() {
         console.log("Starting node helper for: " + this.name);
-        
+
         // Initialize state
         this.isListening = false;
         this.wallpaperDir = "";
@@ -146,7 +154,7 @@ module.exports = NodeHelper.create({
         };
         
         // Initialize LRU cache
-        this.imageCache = new LRUCache(50);
+        this.imageCache = new LRUCache(50, this.cachePath);
         
         // Create cache directory if it doesn't exist
         if (!fs.existsSync(this.cachePath)) {
@@ -175,23 +183,34 @@ module.exports = NodeHelper.create({
     // Clean up old cache entries
     cleanupCache: function() {
         try {
+            if (!fs.existsSync(this.cachePath)) return;
             const now = Date.now();
-            const maxAge = this.config ? this.config.maxCacheAge : 24 * 60 * 60 * 1000;
-            
-            const files = fs.readdirSync(this.cachePath);
+            const maxAge = (this.config && this.config.maxCacheAge) || (24 * 60 * 60 * 1000);
+            const maxSize = (this.config && this.config.maxCacheSize) || 50;
+
+            let files = fs.readdirSync(this.cachePath).filter(f => f.endsWith('.jpg'));
+
+            // Remove files older than maxAge
             files.forEach(file => {
-                if (file.endsWith('.jpg')) {
-                    const filePath = path.join(this.cachePath, file);
-                    const stats = fs.statSync(filePath);
-                    
-                    if (now - stats.mtime.getTime() > maxAge) {
-                        fs.unlinkSync(filePath);
-                        console.log(`MMM-WallpaperColorExtractor: Cleaned up old cache file: ${file}`);
-                    }
+                const filePath = path.join(this.cachePath, file);
+                const stats = fs.statSync(filePath);
+                if (now - stats.mtime.getTime() > maxAge) {
+                    fs.unlinkSync(filePath);
                 }
             });
+
+            // If still over maxSize, remove oldest files
+            files = fs.readdirSync(this.cachePath).filter(f => f.endsWith('.jpg'));
+            if (files.length > maxSize) {
+                const sorted = files
+                    .map(file => ({ path: path.join(this.cachePath, file), mtime: fs.statSync(path.join(this.cachePath, file)).mtime }))
+                    .sort((a, b) => a.mtime - b.mtime);
+                for (let i = 0; i < sorted.length - maxSize; i++) {
+                    fs.unlinkSync(sorted[i].path);
+                }
+            }
         } catch (error) {
-            console.log(`MMM-WallpaperColorExtractor: Error during cache cleanup: ${error.message}`);
+            this.debugLog(`MMM-WallpaperColorExtractor: Error during cache cleanup: ${error.message}`);
         }
     },
     
@@ -228,7 +247,7 @@ module.exports = NodeHelper.create({
     // Socket notification received from module with enhanced error handling
     socketNotificationReceived: function(notification, payload) {
         try {
-            console.log(`MMM-WallpaperColorExtractor: Received notification: ${notification}`);
+            this.debugLog(`MMM-WallpaperColorExtractor: Received notification: ${notification}`);
             
             switch (notification) {
                 case "SUBSCRIBE_WALLPAPER_CHANGES":
@@ -253,7 +272,7 @@ module.exports = NodeHelper.create({
                     this.handleModuleShutdown(payload);
                     break;
                 default:
-                    console.log(`MMM-WallpaperColorExtractor: Unknown notification: ${notification}`);
+                    this.debugLog(`MMM-WallpaperColorExtractor: Unknown notification: ${notification}`);
             }
         } catch (error) {
             this.handleError(error, "SOCKET_NOTIFICATION");
@@ -262,7 +281,7 @@ module.exports = NodeHelper.create({
     
     // Handle subscribe wallpaper changes
     handleSubscribeWallpaperChanges: function(payload) {
-        console.log("MMM-WallpaperColorExtractor: Subscribing to wallpaper changes");
+        this.debugLog("MMM-WallpaperColorExtractor: Subscribing to wallpaper changes");
         this.config = payload.config;
         
         if (!this.isListening) {
@@ -274,7 +293,7 @@ module.exports = NodeHelper.create({
     
     // Handle extract color with retry logic
     handleExtractColor: function(payload) {
-        console.log(`MMM-WallpaperColorExtractor: Extracting color from: ${payload.imagePath}`);
+        this.debugLog(`MMM-WallpaperColorExtractor: Extracting color from: ${payload.imagePath}`);
         
         const startTime = Date.now();
         this.performanceMetrics.extractionCount++;
@@ -308,7 +327,7 @@ module.exports = NodeHelper.create({
     
     // Handle check wallpaper
     handleCheckWallpaper: function(payload) {
-        console.log("MMM-WallpaperColorExtractor: Manual check for wallpaper requested");
+        this.debugLog("MMM-WallpaperColorExtractor: Manual check for wallpaper requested");
         
         if (!this.currentWallpaper || this.checkCount < 3) {
             // Increment the check count
@@ -326,36 +345,36 @@ module.exports = NodeHelper.create({
     
     // Handle process remote wallpaper
     handleProcessRemoteWallpaper: function(payload) {
-        console.log(`MMM-WallpaperColorExtractor: Processing remote wallpaper: ${payload.url}`);
+        this.debugLog(`MMM-WallpaperColorExtractor: Processing remote wallpaper: ${payload.url}`);
         this.processRemoteWallpaper(payload.url, payload.config || this.config);
     },
     
     // Handle error recovery
     handleErrorRecovery: function(payload) {
-        console.log(`MMM-WallpaperColorExtractor: Attempting error recovery for: ${payload.context}`);
+        this.debugLog(`MMM-WallpaperColorExtractor: Attempting error recovery for: ${payload.context}`);
         
         // Implement recovery strategies based on error context
         switch (payload.context) {
             case "CACHE":
                 this.imageCache.clear();
-                console.log("MMM-WallpaperColorExtractor: Cache cleared for recovery");
+                this.debugLog("MMM-WallpaperColorExtractor: Cache cleared for recovery");
                 break;
             case "WALLPAPER_DETECTION":
                 this.searchForWallpapers();
                 break;
             default:
-                console.log(`MMM-WallpaperColorExtractor: No specific recovery strategy for: ${payload.context}`);
+                this.debugLog(`MMM-WallpaperColorExtractor: No specific recovery strategy for: ${payload.context}`);
         }
     },
     
     // Handle performance metric
     handlePerformanceMetric: function(payload) {
-        console.log(`MMM-WallpaperColorExtractor: Performance metric - ${payload.operation}: ${payload.duration}ms`);
+        this.debugLog(`MMM-WallpaperColorExtractor: Performance metric - ${payload.operation}: ${payload.duration}ms`);
     },
     
     // Handle module shutdown
     handleModuleShutdown: function(payload) {
-        console.log("MMM-WallpaperColorExtractor: Module shutdown detected");
+        this.debugLog("MMM-WallpaperColorExtractor: Module shutdown detected");
         
         // Clean up resources
         this.cleanupCache();
@@ -397,7 +416,7 @@ module.exports = NodeHelper.create({
                 })
                 .catch(error => {
                     if (retryAttempt < maxRetries) {
-                        console.log(`MMM-WallpaperColorExtractor: Retry attempt ${retryAttempt + 1}/${maxRetries} for ${imagePath}`);
+                        this.debugLog(`MMM-WallpaperColorExtractor: Retry attempt ${retryAttempt + 1}/${maxRetries} for ${imagePath}`);
                         
                         setTimeout(() => {
                             this.extractColorFromImageWithRetry(imagePath, config, retryAttempt + 1)
@@ -426,7 +445,7 @@ module.exports = NodeHelper.create({
                 
                 if (cachedResult) {
                     this.performanceMetrics.cacheHits++;
-                    console.log(`MMM-WallpaperColorExtractor: Using cached color for ${imagePath}`);
+                    this.debugLog(`MMM-WallpaperColorExtractor: Using cached color for ${imagePath}`);
                     resolve(cachedResult);
                     return;
                 }
@@ -447,16 +466,28 @@ module.exports = NodeHelper.create({
                 }
                 
                 // Process image with Sharp for optimization
+                let tempProcessedPath = null;
                 this.preprocessImage(imagePath, config)
                     .then(processedImagePath => {
+                        // Track temp file so we can delete it after extraction
+                        if (processedImagePath !== imagePath) {
+                            tempProcessedPath = processedImagePath;
+                        }
                         return this.extractVibrantColor(processedImagePath, config);
                     })
                     .then(colorResult => {
+                        // Delete temp preprocessed file to avoid disk accumulation
+                        if (tempProcessedPath) {
+                            try { fs.unlinkSync(tempProcessedPath); } catch (e) { /* ignore */ }
+                        }
                         // Cache the result
                         this.imageCache.set(imageHash, colorResult);
                         resolve(colorResult);
                     })
                     .catch(error => {
+                        if (tempProcessedPath) {
+                            try { fs.unlinkSync(tempProcessedPath); } catch (e) { /* ignore */ }
+                        }
                         reject(error);
                     });
                     
@@ -490,13 +521,13 @@ module.exports = NodeHelper.create({
                     })
                     .catch(error => {
                         // If preprocessing fails, use original image
-                        console.log(`MMM-WallpaperColorExtractor: Image preprocessing failed, using original: ${error.message}`);
+                        this.debugLog(`MMM-WallpaperColorExtractor: Image preprocessing failed, using original: ${error.message}`);
                         resolve(imagePath);
                     });
                     
             } catch (error) {
                 // If Sharp fails, use original image
-                console.log(`MMM-WallpaperColorExtractor: Sharp not available, using original image: ${error.message}`);
+                this.debugLog(`MMM-WallpaperColorExtractor: Sharp not available, using original image: ${error.message}`);
                 resolve(imagePath);
             }
         });
@@ -507,7 +538,7 @@ module.exports = NodeHelper.create({
         return new Promise((resolve, reject) => {
             try {
                 if (!Vibrant) {
-                    console.log("MMM-WallpaperColorExtractor: node-vibrant not available, using fallback color.");
+                    console.warn("MMM-WallpaperColorExtractor: node-vibrant not available, using fallback color.");
                     const fallbackIndex = Math.floor(Math.random() * (config.fallbackColors || []).length);
                     const fallbackColor = (config.fallbackColors || [])[fallbackIndex];
                     resolve({
@@ -626,7 +657,7 @@ module.exports = NodeHelper.create({
             }
             
         } catch (error) {
-            console.log(`MMM-WallpaperColorExtractor: Error selecting color: ${error.message}`);
+            this.debugLog(`MMM-WallpaperColorExtractor: Error selecting color: ${error.message}`);
             return null;
         }
     },
@@ -634,7 +665,7 @@ module.exports = NodeHelper.create({
     // Process a remote wallpaper
     processRemoteWallpaper: function(wallpaperUrl, config) {
         if (!wallpaperUrl) {
-            console.log("MMM-WallpaperColorExtractor: No URL provided");
+            console.error("MMM-WallpaperColorExtractor: No URL provided");
             return;
         }
         
@@ -644,12 +675,12 @@ module.exports = NodeHelper.create({
         
         // Check if image is already cached
         if (fs.existsSync(cachedImagePath)) {
-            console.log(`MMM-WallpaperColorExtractor: Using cached image for ${wallpaperUrl}`);
+            this.debugLog(`MMM-WallpaperColorExtractor: Using cached image for ${wallpaperUrl}`);
             this.extractColorFromImage(cachedImagePath, config);
             return;
         }
         
-        console.log(`MMM-WallpaperColorExtractor: Downloading image from ${wallpaperUrl}`);
+        this.debugLog(`MMM-WallpaperColorExtractor: Downloading image from ${wallpaperUrl}`);
         
         // Parse the URL to determine if we need http or https
         const parsedUrl = url.parse(wallpaperUrl);
@@ -657,29 +688,41 @@ module.exports = NodeHelper.create({
         
         const request = httpModule.get(wallpaperUrl, (response) => {
             if (response.statusCode !== 200) {
-                console.log(`MMM-WallpaperColorExtractor: Failed to download image: ${response.statusCode}`);
+                this.debugLog(`MMM-WallpaperColorExtractor: Failed to download image: ${response.statusCode}`);
                 return;
             }
-            
+
             const fileStream = fs.createWriteStream(cachedImagePath);
             response.pipe(fileStream);
-            
+
             fileStream.on('finish', () => {
                 fileStream.close();
-                console.log(`MMM-WallpaperColorExtractor: Successfully downloaded image to ${cachedImagePath}`);
-                
+                this.debugLog(`MMM-WallpaperColorExtractor: Successfully downloaded image to ${cachedImagePath}`);
+
                 // Now extract color from the downloaded image
                 self.extractColorFromImage(cachedImagePath, config);
             });
         });
-        
+
+        request.setTimeout(30000, () => {
+            request.destroy();
+            console.error("MMM-WallpaperColorExtractor: Remote wallpaper download timed out");
+            const fallbackIndex = Math.floor(Math.random() * config.fallbackColors.length);
+            self.sendSocketNotification("COLOR_EXTRACTED", {
+                success: false,
+                color: config.fallbackColors[fallbackIndex],
+                source: "download-timeout",
+                error: "Request timed out"
+            });
+        });
+
         request.on('error', (err) => {
-            console.log(`MMM-WallpaperColorExtractor: Error downloading image: ${err.message}`);
-            
+            this.debugLog(`MMM-WallpaperColorExtractor: Error downloading image: ${err.message}`);
+
             // Send fallback color
             const fallbackIndex = Math.floor(Math.random() * config.fallbackColors.length);
             const fallbackColor = config.fallbackColors[fallbackIndex];
-            
+
             self.sendSocketNotification("COLOR_EXTRACTED", {
                 success: false,
                 color: fallbackColor,
@@ -691,24 +734,17 @@ module.exports = NodeHelper.create({
     
     // Search for wallpapers in common locations
     searchForWallpapers: function() {
-        console.log("MMM-WallpaperColorExtractor: Searching for wallpapers in common locations");
+        this.debugLog("MMM-WallpaperColorExtractor: Searching for wallpapers in common locations");
         
         // List of common locations to check for wallpapers
         const potentialDirs = [
-            // MMM-Wallpaper related
+            // MMM-Wallpaper related (relative paths work across all installs)
             path.resolve(__dirname, "../MMM-Wallpaper/cache"),
             path.resolve(__dirname, "../../MMM-Wallpaper/cache"),
-            "/home/pi/MagicMirror/modules/MMM-Wallpaper/cache",
-            "/home/RYFUN/MagicMirror/modules/MMM-Wallpaper/cache",
-            
-            // From the RYFUN config
-            "/media/RYFUN/display/backgrounds",
-            
+
             // Common system locations
             path.resolve(__dirname, "../../../modules/default/background"),
-            "/usr/share/backgrounds",
-            "/home/pi/Pictures",
-            "/home/RYFUN/Pictures"
+            "/usr/share/backgrounds"
         ];
         
         // Try each directory
@@ -718,7 +754,7 @@ module.exports = NodeHelper.create({
             }
             
             this.searchedDirs.push(dir);
-            console.log(`MMM-WallpaperColorExtractor: Checking directory: ${dir}`);
+            this.debugLog(`MMM-WallpaperColorExtractor: Checking directory: ${dir}`);
             
             if (fs.existsSync(dir)) {
                 try {
@@ -726,7 +762,7 @@ module.exports = NodeHelper.create({
                     const imageFiles = files.filter(file => file.match(/\.(jpg|jpeg|png|gif|webp)$/i));
                     
                     if (imageFiles.length > 0) {
-                        console.log(`MMM-WallpaperColorExtractor: Found ${imageFiles.length} images in ${dir}`);
+                        this.debugLog(`MMM-WallpaperColorExtractor: Found ${imageFiles.length} images in ${dir}`);
                         this.wallpaperDir = dir;
                         
                         // Find the newest image
@@ -744,28 +780,28 @@ module.exports = NodeHelper.create({
                         }
                         
                         if (newestFile) {
-                            console.log(`MMM-WallpaperColorExtractor: Found newest image: ${newestFile}`);
+                            this.debugLog(`MMM-WallpaperColorExtractor: Found newest image: ${newestFile}`);
                             this.currentWallpaper = newestFile;
                             this.notifyModuleOfWallpaperChange(newestFile);
                             return; // Exit once we've found and processed an image
                         }
                     }
                 } catch (error) {
-                    console.log(`MMM-WallpaperColorExtractor: Error reading directory ${dir}:`, error.message);
+                    this.debugLog(`MMM-WallpaperColorExtractor: Error reading directory ${dir}:`, error.message);
                 }
             }
         }
         
-        console.log("MMM-WallpaperColorExtractor: Could not find any wallpaper images in common locations");
+        this.debugLog("MMM-WallpaperColorExtractor: Could not find any wallpaper images in common locations");
     },
     
     // Find the MMM-Wallpaper directory from config.js
     findWallpaperDirectory: function(config) {
-        console.log("MMM-WallpaperColorExtractor: Finding wallpaper directory");
+        this.debugLog("MMM-WallpaperColorExtractor: Finding wallpaper directory");
         
         // Check if we have direct config info
         if (config && config.wallpaperDir) {
-            console.log(`MMM-WallpaperColorExtractor: Using provided wallpaper directory: ${config.wallpaperDir}`);
+            this.debugLog(`MMM-WallpaperColorExtractor: Using provided wallpaper directory: ${config.wallpaperDir}`);
             this.wallpaperDir = config.wallpaperDir;
             this.startWatchingWallpaperDir();
             return;
@@ -773,19 +809,19 @@ module.exports = NodeHelper.create({
         
         // Try to read the global config to find MMM-Wallpaper settings
         const configPath = path.resolve(__dirname, "../../../config/config.js");
-        console.log(`MMM-WallpaperColorExtractor: Looking for config at: ${configPath}`);
+        this.debugLog(`MMM-WallpaperColorExtractor: Looking for config at: ${configPath}`);
         
         try {
             // Check if config file exists
             if (!fs.existsSync(configPath)) {
-                console.log(`MMM-WallpaperColorExtractor: Config file not found: ${configPath}`);
+                this.debugLog(`MMM-WallpaperColorExtractor: Config file not found: ${configPath}`);
                 this.searchForWallpapers();
                 return;
             }
             
             // Use regex to extract the MMM-Wallpaper source path from config
             const configContent = fs.readFileSync(configPath, "utf8");
-            console.log("MMM-WallpaperColorExtractor: Successfully read config file");
+            this.debugLog("MMM-WallpaperColorExtractor: Successfully read config file");
             
             // Look for MMM-Wallpaper module config
             const wallpaperModuleRegex = /module:\s*["']MMM-Wallpaper["'][\s\S]*?config:\s*{[\s\S]*?source:\s*["']([^"']+)["']/;
@@ -793,33 +829,33 @@ module.exports = NodeHelper.create({
             
             if (match && match[1]) {
                 let sourcePath = match[1];
-                console.log(`MMM-WallpaperColorExtractor: Found MMM-Wallpaper source in config: ${sourcePath}`);
+                this.debugLog(`MMM-WallpaperColorExtractor: Found MMM-Wallpaper source in config: ${sourcePath}`);
                 
                 // Handle local: prefix in the path
                 if (sourcePath.startsWith("local:")) {
                     sourcePath = sourcePath.substring(6); // Remove "local:" prefix
                     this.wallpaperDir = sourcePath;
-                    console.log(`MMM-WallpaperColorExtractor: Found wallpaper directory from config: ${this.wallpaperDir}`);
+                    this.debugLog(`MMM-WallpaperColorExtractor: Found wallpaper directory from config: ${this.wallpaperDir}`);
                     
                     // Check if directory exists
                     if (fs.existsSync(this.wallpaperDir)) {
-                        console.log(`MMM-WallpaperColorExtractor: Wallpaper directory exists: ${this.wallpaperDir}`);
+                        this.debugLog(`MMM-WallpaperColorExtractor: Wallpaper directory exists: ${this.wallpaperDir}`);
                         this.startWatchingWallpaperDir();
                     } else {
-                        console.log(`MMM-WallpaperColorExtractor: Wallpaper directory does not exist: ${this.wallpaperDir}`);
+                        this.debugLog(`MMM-WallpaperColorExtractor: Wallpaper directory does not exist: ${this.wallpaperDir}`);
                         this.searchForWallpapers();
                     }
                 } else {
-                    console.log(`MMM-WallpaperColorExtractor: Source is not a local directory: ${sourcePath}`);
+                    this.debugLog(`MMM-WallpaperColorExtractor: Source is not a local directory: ${sourcePath}`);
                     // For non-local sources, we can't monitor directly
                     this.searchForWallpapers();
                 }
             } else {
-                console.log("MMM-WallpaperColorExtractor: Could not find MMM-Wallpaper source in config");
+                this.debugLog("MMM-WallpaperColorExtractor: Could not find MMM-Wallpaper source in config");
                 this.searchForWallpapers();
             }
         } catch (error) {
-            console.log("MMM-WallpaperColorExtractor: Error reading config file", error);
+            console.error("MMM-WallpaperColorExtractor: Error reading config file", error);
             this.searchForWallpapers();
         }
     },
@@ -827,11 +863,11 @@ module.exports = NodeHelper.create({
     // Start watching the wallpaper directory for changes
     startWatchingWallpaperDir: function() {
         if (!this.wallpaperDir || !fs.existsSync(this.wallpaperDir)) {
-            console.log(`MMM-WallpaperColorExtractor: Invalid wallpaper directory: ${this.wallpaperDir}`);
+            this.debugLog(`MMM-WallpaperColorExtractor: Invalid wallpaper directory: ${this.wallpaperDir}`);
             return;
         }
         
-        console.log(`MMM-WallpaperColorExtractor: Starting to watch directory: ${this.wallpaperDir}`);
+        this.debugLog(`MMM-WallpaperColorExtractor: Starting to watch directory: ${this.wallpaperDir}`);
         
         // Find the most recent image in the directory
         this.findCurrentWallpaper();
@@ -844,89 +880,61 @@ module.exports = NodeHelper.create({
         }, 10000); // Check every 10 seconds
     },
     
+    // Returns the path of the newest image file in dir, or "" if none found
+    _findNewestImageIn: function(dir) {
+        const files = fs.readdirSync(dir);
+        let newestFile = "";
+        let newestTime = 0;
+        for (const file of files) {
+            if (!file.match(/\.(jpg|jpeg|png|gif|webp)$/i)) continue;
+            const filePath = path.join(dir, file);
+            const mtime = fs.statSync(filePath).mtime.getTime();
+            if (mtime > newestTime) {
+                newestTime = mtime;
+                newestFile = filePath;
+            }
+        }
+        return newestFile;
+    },
+
     // Find the most recent image in the wallpaper directory
     findCurrentWallpaper: function() {
         try {
-            console.log(`MMM-WallpaperColorExtractor: Finding current wallpaper in: ${this.wallpaperDir}`);
-            
-            const files = fs.readdirSync(this.wallpaperDir);
-            console.log(`MMM-WallpaperColorExtractor: Found ${files.length} files in directory`);
-            
-            let newestFile = "";
-            let newestTime = 0;
-            let imageCount = 0;
-            
-            for (const file of files) {
-                // Skip non-image files
-                if (!file.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
-                    continue;
-                }
-                
-                imageCount++;
-                const filePath = path.join(this.wallpaperDir, file);
-                const stats = fs.statSync(filePath);
-                
-                if (stats.mtime.getTime() > newestTime) {
-                    newestTime = stats.mtime.getTime();
-                    newestFile = filePath;
-                }
-            }
-            
-            console.log(`MMM-WallpaperColorExtractor: Found ${imageCount} image files in directory`);
-            
+            this.debugLog(`MMM-WallpaperColorExtractor: Finding current wallpaper in: ${this.wallpaperDir}`);
+            const newestFile = this._findNewestImageIn(this.wallpaperDir);
             if (newestFile) {
-                console.log(`MMM-WallpaperColorExtractor: Found newest image: ${newestFile}`);
-                
+                this.debugLog(`MMM-WallpaperColorExtractor: Found newest image: ${newestFile}`);
                 if (newestFile !== this.currentWallpaper) {
                     this.currentWallpaper = newestFile;
-                    console.log(`MMM-WallpaperColorExtractor: Current wallpaper: ${this.currentWallpaper}`);
                     this.notifyModuleOfWallpaperChange(this.currentWallpaper);
                 } else {
-                    console.log(`MMM-WallpaperColorExtractor: Wallpaper unchanged: ${this.currentWallpaper}`);
+                    this.debugLog(`MMM-WallpaperColorExtractor: Wallpaper unchanged: ${this.currentWallpaper}`);
                 }
             } else {
-                console.log("MMM-WallpaperColorExtractor: No image files found in directory");
+                this.debugLog("MMM-WallpaperColorExtractor: No image files found in directory");
             }
         } catch (error) {
-            console.log("MMM-WallpaperColorExtractor: Error finding current wallpaper", error);
+            console.error("MMM-WallpaperColorExtractor: Error finding current wallpaper", error);
         }
     },
-    
+
     // Check for wallpaper changes
     checkForWallpaperChanges: function() {
         try {
-            const files = fs.readdirSync(this.wallpaperDir);
-            let newestFile = "";
-            let newestTime = 0;
-            
-            for (const file of files) {
-                // Skip non-image files
-                if (!file.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
-                    continue;
-                }
-                
-                const filePath = path.join(this.wallpaperDir, file);
-                const stats = fs.statSync(filePath);
-                
-                if (stats.mtime.getTime() > newestTime) {
-                    newestTime = stats.mtime.getTime();
-                    newestFile = filePath;
-                }
-            }
-            
+            const newestFile = this._findNewestImageIn(this.wallpaperDir);
             if (newestFile && newestFile !== this.currentWallpaper) {
-                console.log(`MMM-WallpaperColorExtractor: Detected wallpaper change to: ${newestFile}`);
+                this.debugLog(`MMM-WallpaperColorExtractor: Detected wallpaper change to: ${newestFile}`);
                 this.currentWallpaper = newestFile;
                 this.notifyModuleOfWallpaperChange(newestFile);
             }
         } catch (error) {
-            console.log("MMM-WallpaperColorExtractor: Error checking for wallpaper changes", error);
+            console.error("MMM-WallpaperColorExtractor: Error checking for wallpaper changes", error);
         }
     },
     
     // Notify the module of a wallpaper change
     notifyModuleOfWallpaperChange: function(wallpaperPath) {
-        console.log(`MMM-WallpaperColorExtractor: Notifying module of wallpaper change: ${wallpaperPath}`);
+        this.debugLog(`MMM-WallpaperColorExtractor: Notifying module of wallpaper change: ${wallpaperPath}`);
         this.sendSocketNotification("WALLPAPER_CHANGED", {
             wallpaperPath: wallpaperPath
         });
@@ -937,47 +945,6 @@ module.exports = NodeHelper.create({
         if (this.watchTimer) {
             clearInterval(this.watchTimer);
             this.watchTimer = null;
-        }
-    },
-
-    /**
-     * Ensures cache directory exists and is clean
-     */
-    ensureCacheDirectory: function() {
-        if (!fs.existsSync(this.cachePath)) {
-            fs.mkdirSync(this.cachePath, { recursive: true });
-        }
-        this.cleanupCache();
-    },
-
-    /**
-     * Cleans up old cached files
-     */
-    cleanupCache: function() {
-        const files = fs.readdirSync(this.cachePath);
-        const now = Date.now();
-        
-        files.forEach(file => {
-            const filePath = path.join(this.cachePath, file);
-            const stats = fs.statSync(filePath);
-            
-            if (now - stats.mtime.getTime() > this.config.maxCacheAge) {
-                fs.unlinkSync(filePath);
-            }
-        });
-
-        // If we still have too many files, remove oldest
-        if (files.length > this.config.maxCacheSize) {
-            const sortedFiles = files
-                .map(file => ({
-                    path: path.join(this.cachePath, file),
-                    mtime: fs.statSync(path.join(this.cachePath, file)).mtime
-                }))
-                .sort((a, b) => a.mtime - b.mtime);
-
-            for (let i = 0; i < sortedFiles.length - this.config.maxCacheSize; i++) {
-                fs.unlinkSync(sortedFiles[i].path);
-            }
         }
     },
 

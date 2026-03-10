@@ -71,7 +71,7 @@ Module.register("MMM-WallpaperColorExtractor", {
             "03-02": "#BF5700", // Texas Independence Day (Burnt orange - Texas color)
             "03-03": "#FFC222", // 303 Day (Denver gold)
             "03-06": "#DC143C", // Casimir Pulaski Day (Polish flag red)
-            "03-14": "#3141592", // Pi Day (A blue based on pi digits!)
+            "03-14": "#314159", // Pi Day (first 6 digits of pi as hex color)
             "03-17": "#00FF00", // St. Patrick's Day (Bright green)
             "03-18": "#FFA0A0", // Keelee's Birthday (Light pink from your CSS)
 
@@ -208,7 +208,7 @@ Module.register("MMM-WallpaperColorExtractor", {
     applyPreset: function(presetName) {
         if (this.presets[presetName]) {
             this.debug(`Applying preset: ${presetName}`);
-            Object.assign(this.config, this.presets[presetName]);
+            this.config = Object.assign({}, this.config, this.presets[presetName]);
         } else {
             this.logError(`Unknown preset: ${presetName}`, "CONFIG");
         }
